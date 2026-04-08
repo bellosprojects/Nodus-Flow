@@ -1,0 +1,253 @@
+import { createStore } from "solid-js/store";
+import { snapToGrid } from "../utils/math";
+import { createSignal } from "solid-js";
+import { sendEvent } from "../core/socket";
+import { connections, setConnections } from "./connections";
+
+export interface Node {
+    id: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: string,
+    title?: string,
+    opacity: number,
+    targetX?: number,
+    targetY?: number,
+    radius: number
+}
+
+export const [nodes, setNodes] = createStore<Node[]>([]);
+
+export const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
+
+export const [draggedNodeId, setDraggedNodeId] = createSignal<string | null>(null);
+
+export const selectedNode = () => nodes.find(n => n.id === selectedNodeId());
+
+export const draggedNode = () => nodes.find(n => n.id === draggedNodeId());
+
+export const addNode = (x: number, y : number) => {
+
+    const newID = Math.random().toString(36).substring(6).toUpperCase();
+
+    const newNode: Node = {
+        id: newID,
+        x,
+        y,
+        width: 160,
+        height: 80,
+        color: "#70C8C8",
+        opacity: 1,
+        radius: 8
+    };
+    setNodes([...nodes, newNode]);
+
+    console.log("Nodo agregado:", newNode);
+
+    sendEvent({
+        tipo: "nuevo_nodo",
+        nodo: {
+            id: newID,
+            w: 160,
+            h: 80,
+            x: x,
+            y: y,
+            texto: "",
+            color: "#70C8C8",
+            opacidad: 1,
+            radius: 8
+        }
+    });
+    
+};
+
+export const addRemoteNode = (id: string, x : number, y : number, w : number, h : number, text : string, color : string, opacidad: number, radius: number) => {
+
+    const newNode : Node = {
+        id: id,
+        x: x,
+        y: y,
+        width: w,
+        height: h,
+        title: text,
+        color: color,
+        opacity: opacidad,
+        radius: radius
+    }
+
+    setNodes([...nodes, newNode]);
+}
+
+export const updateNodePosition = (id: string, dx: number, dy: number) => {
+    setNodes(
+        (n) => n.id === id,
+        (n) => ({ 
+            ...n,
+            x: n.x + dx,
+            y: n.y + dy
+        })
+    );
+};
+
+export const updateNodoAbsolutePosition = (id:string, x:number, y:number) => {
+    setNodes(
+        (n) => n.id === id,
+        (n) => ({ 
+            ...n,
+            x: x,
+            y: y
+        })
+    );
+}
+
+export const finalizeNodePosition = (id: string) => {
+
+    const node = nodes.find(n => n.id === id);
+
+    if(node){
+        const newX = snapToGrid(node.x);
+        const newY = snapToGrid(node.y);
+
+        setNodes(
+            (n) => n.id === id,
+            (n) => ({ 
+                ...n,
+                x: newX,
+                y: newY
+            })
+        );
+
+        sendEvent({
+            tipo: 'mover_nodo',
+            id: id,
+            x: newX,
+            y: newY
+        });
+    }
+}
+
+export const finalizeNodeSize = (id: string) => {
+    setNodes(
+        (n) => n.id === id,
+        (n) => ({ 
+            ...n,
+            width: snapToGrid(Math.max(n.width, 60)),
+            height: snapToGrid(Math.max(n.height, 40))
+        })
+    );
+
+    const node = nodes.find(n => n.id === id);
+
+    if(node){
+        sendEvent({
+            tipo: 'redimensionar_nodo',
+            id: id,
+            w: node.width,
+            h: node.height,
+            x: node.x,
+            y: node.y
+        });
+    }
+}
+
+export const moveToFront = (id: string) => {
+    setNodes((nodes) => {
+        const index = nodes.findIndex(n => n.id === id);
+        if (index === -1) return nodes;
+
+        const nodeToMove = nodes[index];
+        const newNodes = [...nodes];
+        newNodes.splice(index, 1);
+        newNodes.push(nodeToMove);
+
+        return newNodes;
+    });
+}
+
+export const updateNodeSize = (id: string, newWidth: number, newHeight: number) => {
+    setNodes(
+        (n) => n.id === id,
+        (n) => ({ 
+            ...n,
+            width: newWidth,
+            height: newHeight
+        })
+    );
+}
+
+export const updateNodeColor = (id: string, newColor: string, send = true) => {
+    setNodes(
+        (n) => n.id === id,
+        (n) => ({
+            ...n,
+            color: newColor
+        })
+    );
+
+    if(send){
+        sendEvent({
+            tipo: 'cambiar_color_nodo',
+            color: newColor,
+            id: id
+        })
+    }
+}
+
+export const updateNodoTitle = (id: string, newTitle: string, send = true) => {
+    setNodes(
+        (n) => n.id === id,
+        "title", newTitle
+    );
+
+    if(send)
+    sendEvent({
+        tipo: 'cambiar_texto_nodo',
+        texto: newTitle,
+        id: id,
+        h: 0
+    })
+};
+
+export const deleteNode = (id: string, send = true) => {
+    setNodes(nodes.filter(n => n.id !== id));
+
+    setConnections(
+        connections.filter(conn => conn.from != id && conn.to != id)
+    );
+
+    if(send)
+    sendEvent({
+        tipo: "eliminar_nodo",
+        id: id
+    })
+}
+
+export const updateNodeRemote = (id: string, tx: number, ty: number) => {
+    setNodes(n => n.id === id, {targetX : tx, targetY: ty});
+};
+
+export const updateNodeOpacity = (id:string, newOpacity: number, send = true) => {
+    setNodes(n => n.id === id, "opacity", newOpacity);
+
+    if(send){
+        sendEvent({
+            tipo: "cambiar_opacidad_nodo",
+            id: id,
+            opacidad: newOpacity
+        })
+    }
+}
+
+export const updateNodeRadius = (id:string, newRadius: number, send = true) => {
+    setNodes(n => n.id === id, "radius", newRadius);
+
+    if(send){
+        sendEvent({
+            tipo: "cambiar_radius_nodo",
+            id: id,
+            radius: newRadius
+        })
+    }
+}

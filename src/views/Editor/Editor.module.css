@@ -1,0 +1,34 @@
+.invisibleInput {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,0.4);
+    border-radius: 7px 7px 0 0;
+    pointer-events: auto;
+    text-align: center;
+    backdrop-filter: blur(2px);
+    transition: all 0.3s;
+    color: white;
+    font-size: 16px;
+    width: 260px;
+}
+
+.invisibleInput:focus{
+    outline: none;
+}
+
+.topLeftToolbar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    font-family: Arial, Helvetica, sans-serif;
+    display: flex;
+    flex-direction: column;
+    font-size: 18px;
+}
+
+.roomId {
+    margin-top: 20px;
+    font-size: 16px;
+    font-family: monospace;
+}
