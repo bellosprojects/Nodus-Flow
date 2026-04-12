@@ -1,4 +1,4 @@
-import { addNode } from '../../../models/nodes';
+import { addNode, copyNode, deleteNode, getNode, jumpToNode, lockNode, moveToBack, moveToFront, Node, nodes, selectedNode, selectedNodeId, setSelectedNodeId, unLockNode, updateHeightFromText } from '../../../models/nodes';
 
 import myLogo from "../../../assets/NodusLogo.png";
 import selectIco from "../../../assets/select.svg";
@@ -6,13 +6,31 @@ import fullScreenIco from "../../../assets/fullscreen.svg";
 import connectIco from "../../../assets/connect.svg";
 import dragIco from "../../../assets/drag.svg";
 import homeIco from "../../../assets/home.svg";
-import toolIco from "../../../assets/tools.svg";
+import editIco from "../../../assets/edit.svg";
+import layersIco from "../../../assets/layers.svg";
+import terminalIco from "../../../assets/terminal.svg";
 
-import { center } from '../../../utils/math';
+import textIco from "../../../assets/text-adjust.svg";
+import copyIco from "../../../assets/copy.svg";
+import lockIco from "../../../assets/lock.svg";
+import unLockIco from "../../../assets/unlock.svg";
+import frontIco from "../../../assets/front.svg";
+import backIco from "../../../assets/back.svg";
+import deleteIco from "../../../assets/delete.svg";
+
+import shareIco from "../../../assets/share.svg";
+import downloadIco from "../../../assets/download.svg";
+
+import { center, wordlToScreen } from '../../../utils/math';
 
 import styles from "../Editor.module.css";
 
 import { updateCurrentProjectName, userData } from '../../../models/userStore';
+import { For, Match, Show, Switch } from 'solid-js';
+
+import { isCommandPaletteOpen, isEditPanelOpen, isLayersPanelOpen, layerView, mouseOption, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setLayerView, setMouseOption } from '../Editor';
+import { activeUsers } from '../../../models/users';
+import { Connection, connections, deleteConnection, selectedConnectionId, setSelectedConnectionId,  } from '../../../models/connections';
 
 export const HEADER = () => {
     return (
@@ -33,18 +51,32 @@ export const HEADER = () => {
 export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => {
     return (
         <div class="glass-panel left-toolbar">
-            <img src={homeIco} alt="" class="bar-item" onClick={onHome}/>
-            <img src={toolIco} alt="" class="bar-item"/>
+
+            <img src={editIco} alt="" class={`${styles.barItem} ${isEditPanelOpen()? styles.selected : ""}`} onClick={(_) => setIsEditPanelOpen(prev => !prev)}/>
+
+            <img src={layersIco} alt="" class={`${styles.barItem} ${isLayersPanelOpen()? styles.selected : ""}`} onClick={(_) => setIsLayersPanelOpen(prev => !prev)}/>
+
+            <img src={terminalIco} alt="" class={`${styles.barItem} ${isCommandPaletteOpen()? styles.selected : ""}`} onClick={(_) => setIsCommandPaletteOpen(prev => !prev)}/>
+
             <div class="separator" />
-            <img src={selectIco} alt="" class="bar-item"/>
+
             <div class="square" onClick={() => {
                 const point = center();
                 addNode(point.x - 80, point.y - 40);
             }}></div>
-            <img src={connectIco} alt="" class="bar-item"/>
-            <img src={dragIco} alt="" class="bar-item"/>
+
+            <img src={selectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'select' ? styles.selected : ""}`} onClick={(_) => setMouseOption('select')}/>
+
+            <img src={dragIco} alt="" class={`${styles.barItem} ${mouseOption() == 'move'? styles.selected : ""}`} onClick={(_) => setMouseOption('move')}/>
+
+            <img src={connectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'connect' ? styles.selected : ""}`} onClick={(_) => setMouseOption('connect')}/>
+
             <div class="separator" />
-            <img src={fullScreenIco} alt="" class="bar-item" onClick={onFullScreen}/>
+
+            <img src={fullScreenIco} alt="" class={styles.barItem} onClick={onFullScreen}/>
+
+            <img src={homeIco} alt="" class={styles.barItem} onClick={onHome}/>
+
         </div>
     )
 }
@@ -52,10 +84,10 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
 export const USERS_PANEL = () => {
 
     return (
-        <div class='top-right-panel'>
-            <div class='users-panel' id='users'></div>
-            <button id='share'>Share</button>
-            <button id='export'>Export</button>
+        <div class={styles.usersPanel}>
+            <For each={activeUsers}>
+                {(user) => USER_AVATAR(user.nombre, user.color)}
+            </For>
         </div>
     )
 
@@ -63,15 +95,25 @@ export const USERS_PANEL = () => {
 
 export const USER_AVATAR = (nombre: string, color: string) => {
     return (
-        <div class='user-avatar' style={{"background-color": color}}>{nombre.substring(0,2).toUpperCase()}</div>
+        <div class={styles.userAvatar} style={{"background-color": color}}>{nombre.substring(0,2).toUpperCase()}</div>
+    )
+}
+
+
+export const TOP_BUTTONS = (onExport: () => void, onShare: () => void) => {
+    return (
+        <div class={styles.topButtons}>
+            <img src={shareIco} alt="" onClick={onShare}/>
+            <img src={downloadIco} alt="" onClick={onExport}/>
+        </div>
     )
 }
 
 export const PROJECT_NAME = () => {
     return (
-        <div style={{display: "flex", gap: "20px"}}>
-            Project Name:
-            <input type="text" class={styles.invisibleInput} value={userData.currentProjectName} onInput={(e) => updateCurrentProjectName(e.currentTarget.value)}/>
+        <div class={styles.projectName}>
+            <p>Project Name: </p>
+            <input placeholder='Enter project name...' type="text" value={userData.currentProjectName} onInput={(e) => updateCurrentProjectName(e.currentTarget.value)}/>
         </div>
     )
 }
@@ -79,5 +121,92 @@ export const PROJECT_NAME = () => {
 export const ROOM_ID = () => {
     return (
         <p class={styles.roomId}>Room ID: {userData.roomId}</p>
+    )
+}
+
+export const TOOL_BELT = () => {
+    return  (
+        <Show 
+            when={selectedNode()}>
+            <div class={styles.toolBelt}
+                style={{left: `${wordlToScreen(selectedNode()!.x, 0).x + 20}px`,
+                top: `${wordlToScreen(0, selectedNode()!.y).y - 60}px`}}>
+                <div class={styles.toolBeltButton} data-tooltip="Fit height">
+                    <img src={textIco} alt="" onClick={(_) => updateHeightFromText(selectedNode()!.id)}/>
+                </div>
+                <div class={styles.toolBeltButton} data-tooltip="Copy">
+                    <img src={copyIco} alt="" onClick={(_) => copyNode(selectedNode()!.id)}/>
+                </div>
+                <div class={styles.toolBeltButton} data-tooltip={selectedNode()!.lock? "Unlock" : "Lock"}>
+                    <img src={selectedNode()!.lock? lockIco : unLockIco} alt="" onClick={(_) => selectedNode()!.lock? unLockNode(selectedNode()!.id) : lockNode(selectedNode()!.id)}/>
+                </div>
+                <div class={styles.toolBeltButton} data-tooltip="Bring to front">
+                    <img src={frontIco} alt="" onClick={(_) => moveToFront(selectedNode()!.id)}/>
+                </div>
+                <div class={styles.toolBeltButton} data-tooltip="Send to back">
+                    <img src={backIco} alt="" onClick={(_) => moveToBack(selectedNode()!.id)}/>
+                </div>
+                <div class={styles.toolBeltButton} data-tooltip="Delete">
+                    <img src={deleteIco} alt="" onClick={(_) => deleteNode(selectedNode()!.id)}/>
+                </div>
+            </div>
+        </Show>
+    )
+}
+
+export const LAYERS_PANEL = () => {
+    return (
+        <Show
+            when={isLayersPanelOpen()}>
+                <div class={styles.layersPanel}>
+                    <div class={styles.layersLabels}>
+                        <p classList={{[styles.layersTitle]: true, [styles.selected]: layerView() == 'nodes'}} onClick={(_) => setLayerView('nodes')}>Nodes</p>
+                        <p classList={{[styles.layersTitle]: true, [styles.selected]: layerView() == 'connections'}} onClick={(_) => setLayerView('connections')}>Connections</p>
+                    </div>
+                    <div class={styles.layersList}>
+                        
+                        <Switch>
+                            <Match when={layerView() == 'nodes'}>
+                                <For each={nodes.slice().reverse()}>
+                                    {(node) => 
+                                        NODE_FRAME(node)
+                                    }
+                                </For>
+                            </Match>
+
+                            <Match when={layerView() == 'connections'}>
+                                <For each={connections.slice().reverse()}>
+                                    {(conn) => 
+                                        CONN_FRAME(conn)
+                                    }
+                                </For>
+                            </Match>
+                        </Switch>
+                    
+                    </div>
+                </div>
+        </Show>
+    )
+}
+
+const NODE_FRAME = (node: Node) => {
+    return (
+        <div class={`${styles.layerItem} ${selectedNodeId() === node.id? styles.selected: ""} `}
+            onClick={(_) => jumpToNode(node)}
+            >
+                <img src={node.lock? lockIco : unLockIco} onClick={(_) => node.lock? unLockNode(node.id) : lockNode(node.id)}/>
+                <p>{`${node.id} - ${node.title?.substring(0, 10)}`}</p>
+            </div>
+    )
+}
+
+const CONN_FRAME = (conn: Connection) => {
+    return (
+        <div class={`${styles.layerItem} ${selectedConnectionId() === conn.id? styles.selected: ""} `}
+            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodeId(null)}}
+            >
+                <img src={deleteIco} onClick={(_) => deleteConnection(conn.id)}/>
+                <p>{`${getNode(conn.from)?.title || "Empty"} - ${getNode(conn.to)?.title || "Empty"}`}</p>
+            </div>
     )
 }

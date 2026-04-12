@@ -1,5 +1,6 @@
 import { createStore } from "solid-js/store";
 import { sendEvent } from "../core/socket";
+import { createSignal } from "solid-js";
 
 export interface Connection {
     id: string,
@@ -9,6 +10,10 @@ export interface Connection {
 }
 
 export const [connections, setConnections] = createStore<Connection[]>([]);
+
+export const [selectedConnectionId, setSelectedConnectionId] = createSignal<string | null>(null);
+
+export const selectedConnection = () => connections.find(conn => conn.id === selectedConnectionId());
 
 export const addConnection = (fromId: string, toId: string) => {
     if(fromId === toId) return;
@@ -41,4 +46,15 @@ export const createRemoteConnection = (id: string, origen: string, destino: stri
     };
 
     setConnections([...connections, newConn]);
+}
+
+export const deleteConnection = (id: string, send = true) => {
+    setConnections(connections.filter(conn => conn.id != id));
+
+    if(send){
+        sendEvent({
+            tipo: "eliminar_conexion",
+            id: id
+        });
+    }
 }

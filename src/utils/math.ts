@@ -22,3 +22,11 @@ export const screenToWorld = (mouseX: number, mouseY: number) => {
 export const center = () => {
     return screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
 }
+
+export const wordlToScreen = (wordlX: number, wordlY: number) => {
+    const dpr = window.devicePixelRatio || 1;
+    return {
+        x: wordlX * scale + offsetX / dpr,
+        y: wordlY * scale + offsetY / dpr
+    }
+}

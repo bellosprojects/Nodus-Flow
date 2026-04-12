@@ -1,8 +1,10 @@
 import { createStore } from "solid-js/store";
 import { snapToGrid } from "../utils/math";
-import { createSignal } from "solid-js";
+import { createSignal, createMemo } from "solid-js";
 import { sendEvent } from "../core/socket";
-import { connections, setConnections } from "./connections";
+import { connections, setConnections, setSelectedConnectionId } from "./connections";
+import { nodusCanvas } from "../core/NodusCanvas";
+import { scale, searchQuery, setIsCommandPaletteOpen, setOffset } from "../views/Editor/Editor";
 
 export interface Node {
     id: string,
@@ -16,9 +18,20 @@ export interface Node {
     targetX?: number,
     targetY?: number,
     radius: number
+    lock: boolean
 }
 
 export const [nodes, setNodes] = createStore<Node[]>([]);
+
+export const filteredNodes = createMemo(() => {
+
+    const currentNodes = [...nodes]; 
+    const query = searchQuery().toLowerCase();
+    
+    return currentNodes.filter(n => 
+        (n.title || "").toLowerCase().includes(query)
+    );
+});
 
 export const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
 
@@ -27,6 +40,8 @@ export const [draggedNodeId, setDraggedNodeId] = createSignal<string | null>(nul
 export const selectedNode = () => nodes.find(n => n.id === selectedNodeId());
 
 export const draggedNode = () => nodes.find(n => n.id === draggedNodeId());
+
+export const getNode = (id: string) => nodes.find(n => n.id === id);
 
 export const addNode = (x: number, y : number) => {
 
@@ -40,8 +55,10 @@ export const addNode = (x: number, y : number) => {
         height: 80,
         color: "#70C8C8",
         opacity: 1,
-        radius: 8
+        radius: 8,
+        lock: false
     };
+
     setNodes([...nodes, newNode]);
 
     console.log("Nodo agregado:", newNode);
@@ -57,13 +74,54 @@ export const addNode = (x: number, y : number) => {
             texto: "",
             color: "#70C8C8",
             opacidad: 1,
-            radius: 8
+            radius: 8,
+            pin: false
         }
     });
     
 };
 
-export const addRemoteNode = (id: string, x : number, y : number, w : number, h : number, text : string, color : string, opacidad: number, radius: number) => {
+export const copyNode = (id: string) => {
+    const currentNode = nodes.find(n => n.id === id);
+
+    if(currentNode){
+
+        const newID = Math.random().toString(36).substring(6).toUpperCase();
+
+        const newNode : Node = {
+            id: newID,
+            x: currentNode.x + 20,
+            y: currentNode.y + 20,
+            width: currentNode.width,
+            height: currentNode.height,
+            radius: currentNode.radius,
+            opacity: currentNode.opacity,
+            color: currentNode.color,
+            title: currentNode.title,
+            lock: currentNode.lock
+        };
+
+        setNodes([...nodes, newNode]);
+
+        sendEvent({
+            tipo: "nuevo_nodo",
+            nodo: {
+                id: newID,
+                w: newNode.width,
+                h: newNode.height,
+                x: newNode.x,
+                y: newNode.y,
+                texto: newNode.title || "",
+                color: newNode.color,
+                opacidad: newNode.opacity,
+                radius: newNode.radius,
+                pin: newNode.lock
+            }
+        });
+    }
+}
+
+export const addRemoteNode = (id: string, x : number, y : number, w : number, h : number, text : string, color : string, opacidad: number, radius: number, lock: boolean) => {
 
     const newNode : Node = {
         id: id,
@@ -74,7 +132,8 @@ export const addRemoteNode = (id: string, x : number, y : number, w : number, h 
         title: text,
         color: color,
         opacity: opacidad,
-        radius: radius
+        radius: radius,
+        lock: lock
     }
 
     setNodes([...nodes, newNode]);
@@ -152,7 +211,7 @@ export const finalizeNodeSize = (id: string) => {
     }
 }
 
-export const moveToFront = (id: string) => {
+export const moveToFront = (id: string, send = true) => {
     setNodes((nodes) => {
         const index = nodes.findIndex(n => n.id === id);
         if (index === -1) return nodes;
@@ -164,6 +223,33 @@ export const moveToFront = (id: string) => {
 
         return newNodes;
     });
+
+    if(send){
+        sendEvent({
+            tipo: 'traer_al_frente',
+            id: id
+        });
+    }
+}
+
+export const moveToBack = (id: string, send = true) => {
+    setNodes((nodes) => {
+        const index = nodes.findIndex(n => n.id === id);
+        if(index === -1) return nodes;
+
+        const nodeToMode = [nodes[index]];
+        const newNodes = [...nodes];
+        newNodes.splice(index, 1);
+
+        return nodeToMode.concat(newNodes);
+    });
+
+    if(send){
+        sendEvent({
+            tipo: 'enviar_al_fondo',
+            id: id
+        });
+    }
 }
 
 export const updateNodeSize = (id: string, newWidth: number, newHeight: number) => {
@@ -205,8 +291,7 @@ export const updateNodoTitle = (id: string, newTitle: string, send = true) => {
     sendEvent({
         tipo: 'cambiar_texto_nodo',
         texto: newTitle,
-        id: id,
-        h: 0
+        id: id
     })
 };
 
@@ -251,3 +336,64 @@ export const updateNodeRadius = (id:string, newRadius: number, send = true) => {
         })
     }
 }
+
+export const updateHeightFromText = (id: string) => {
+    const node = nodes.find(n => n.id === id);
+
+    if(node){
+
+        const CK = nodusCanvas.getCK();
+
+        const textStyle = new CK.TextStyle({
+            color: CK.Color(0,0,0),
+            fontFamilies: ['Inter 28pt Mudium']
+        });
+
+        const paragraphStyle = new CK.ParagraphStyle({
+            textStyle: textStyle,
+            textAlign: CK.TextAlign.Center,
+        });
+
+        const builder = CK.ParagraphBuilder.Make(paragraphStyle, nodusCanvas.getFont()!);
+        builder.addText(node.title || "Nuevo Nodo");
+
+        const paragraph = builder.build();
+        paragraph.layout(node.width - 20);
+
+        updateNodeSize(id, node.width, paragraph.getHeight() + 20);
+        finalizeNodeSize(id);
+    }
+}
+
+export const lockNode = (id: string, send = true) => {
+    setNodes(n => n.id === id, "lock", true);
+
+    if(send){
+        sendEvent({
+            tipo: 'bloquear_nodo',
+            id: id
+        });
+    }
+}
+
+export const unLockNode = (id: string, send = true) => {
+    setNodes(n => n.id === id, "lock", false);
+
+    if(send){
+        sendEvent({
+            tipo: 'desbloquear_nodo',
+            id: id
+        });
+    }
+}
+
+export const jumpToNode = (node: Node) => {
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+
+    setOffset(centerX - ((node.x + node.width / 2) * scale), centerY - ((node.y + node.height / 2) * scale));
+
+    setSelectedNodeId(node.id);
+    setSelectedConnectionId(null);
+    setIsCommandPaletteOpen(false);
+};

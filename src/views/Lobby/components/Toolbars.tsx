@@ -42,7 +42,7 @@ export const RECENT_USED = (onClick: () => void) => {
 
 export const HEADER = () => {
     return (
-        <div style={{display: "flex"}}>
+        <div style={{display: "flex", "align-items": "center"}}>
             <img src={myLogo} alt="alt" width={"30px"} height={"26px"} />
             <h1>Nodus Flow</h1>
         </div>

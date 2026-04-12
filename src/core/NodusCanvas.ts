@@ -43,7 +43,7 @@ class NodusCanvas {
 
             canvas.save();
 
-            canvas.clear(this.CK.Color(0,0,0,1));
+            canvas.clear(this.CK.Color(1, 3, 5));
             drawBackground();
 
             canvas.translate(offsetX, offsetY);
@@ -117,6 +117,10 @@ class NodusCanvas {
 
     public getCanvas(){
         return this.sufrace!.getCanvas();
+    }
+
+    public getPicture(){
+        return this.sufrace!.makeImageSnapshot(this.getCanvas().getDeviceClipBounds());
     }
 
     public destroy(){

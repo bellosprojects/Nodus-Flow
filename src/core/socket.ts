@@ -1,20 +1,13 @@
-import { createSignal } from "solid-js";
-import { addRemoteNode, deleteNode, updateNodeColor, updateNodeOpacity, updateNodeRadius, updateNodeRemote, updateNodeSize, updateNodoTitle } from "../models/nodes";
+import { addRemoteNode, deleteNode, lockNode, moveToBack, moveToFront, unLockNode, updateNodeColor, updateNodeOpacity, updateNodeRadius, updateNodeRemote, updateNodeSize, updateNodoTitle } from "../models/nodes";
 import { randomColor } from "../utils/color";
 import { throttle } from "../utils/network";
-import { USER_AVATAR } from "../views/Editor/components/Toolbars";
-import { createRemoteConnection } from "../models/connections";
+import { createRemoteConnection, deleteConnection } from "../models/connections";
 import { updateCurrentProjectName, userData } from "../models/userStore";
+import { setOffset } from "../views/Editor/Editor";
+import { setActiveUsers, User } from "../models/users";
 
 
 export let socket : WebSocket | null = null;
-
-export interface User {
-    nombre: string,
-    color: string
-}
-
-export const [users, setUsers] = createSignal<User[]>([]);
 
 export function closeSocket(){
     socket = null;
@@ -42,16 +35,20 @@ export function initSocket(){
         switch(data.tipo){
             case 'nuevo_nodo':
                 const nodo = data.nodo;
-                addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius);
+                addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius, nodo.pin);
                 break;
             case 'estado_inicial':
                 for(let nodo of data.nodos){
-                    addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius);
+                    addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius, nodo.pin);
                 }
                 for(let conn of data.conexiones){
                     createRemoteConnection(conn.id, conn.origenId, conn.destinoId, conn.style);
                 }
                 updateCurrentProjectName(data.nombre);
+                if(data.nodos.length > 0){
+                    const init_node = data.nodos[0];
+                    setOffset(-(init_node.x + init_node.w / 2) + window.innerWidth / 2, -(init_node.y + init_node.h / 2) + window.innerHeight / 2);
+                }
                 break;
             case 'mover_nodo':
                 updateNodeRemote(data.id, data.x, data.y);
@@ -70,11 +67,13 @@ export function initSocket(){
                 for(let user of data.usuarios){
                     const newUser: User = {
                         nombre: user.nombre,
-                        color: user.color
+                        color: user.color,
+                        x: user.x,
+                        y: user.y,
+                        object: user.object
                     }
                     newUsersList.push(newUser);
-                    setUsers(newUsersList);
-                    updatePresence();
+                    setActiveUsers(newUsersList);
                 }
                 break;
             case 'crear_conexion':
@@ -93,24 +92,26 @@ export function initSocket(){
             case 'redimensionar_nodo':
                 updateNodeSize(data.id, data.w, data.h);
                 break;
+            case 'enviar_al_fondo':
+                moveToBack(data.id, false);
+                break;
+            case 'traer_al_frente':
+                moveToFront(data.id, false);
+                break;
+            case 'bloquear_nodo':
+                lockNode(data.id, false);
+                break;
+            case 'desbloquear_nodo':
+                unLockNode(data.id, false);
+                break;
+            case 'eliminar_conexion':
+                deleteConnection(data.id, false);
+                break;
         };
 
     };
 
 };
-
-function updatePresence(){
-    const usersList = document.getElementById('users');
-
-    if(usersList){
-        usersList.innerHTML = '';
-
-        for(let user of users()){
-            const user_avatar = USER_AVATAR(user.nombre, user.color);
-            usersList.appendChild(user_avatar as HTMLElement);
-        }
-    }
-}
 
 export const sendEvent = (payload: any) => {
     if (socket?.readyState === WebSocket.OPEN) {
