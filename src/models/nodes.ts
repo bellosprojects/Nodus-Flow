@@ -1,10 +1,15 @@
 import { createStore } from "solid-js/store";
 import { snapToGrid } from "../utils/math";
-import { createSignal, createMemo } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import { sendEvent } from "../core/socket";
-import { connections, setConnections, setSelectedConnectionId } from "./connections";
+import { connections, connectionsByNode, setConnections, setSelectedConnectionId } from "./connections";
 import { nodusCanvas } from "../core/NodusCanvas";
-import { scale, searchQuery, setIsCommandPaletteOpen, setOffset } from "../views/Editor/Editor";
+import {  setIsCommandPaletteOpen } from "../views/Editor/Editor";
+import { activeUsers } from "./users";
+import { userData } from "./userStore";
+import { showToast, ToastType } from "./toast";
+import { calculateDiagramBounds } from "../utils/path";
+import { pushAction } from "../core/history";
 
 export interface Node {
     id: string,
@@ -23,27 +28,68 @@ export interface Node {
 
 export const [nodes, setNodes] = createStore<Node[]>([]);
 
-export const filteredNodes = createMemo(() => {
+export const [selectedNodesIds, setSelectedNodesIds] = createSignal<string[]>([]);
 
-    const currentNodes = [...nodes]; 
-    const query = searchQuery().toLowerCase();
-    
-    return currentNodes.filter(n => 
-        (n.title || "").toLowerCase().includes(query)
-    );
+export const selectedNodes = createMemo(() => {
+    const ids = new Set(selectedNodesIds());
+
+    return [...nodes].filter(node => ids.has(node.id));
 });
 
-export const [selectedNodeId, setSelectedNodeId] = createSignal<string | null>(null);
+createEffect(() => {
+    const currentNodes = [...nodes];
+    const currentIds = selectedNodesIds();
+
+    const validIds = currentIds.filter(id => currentNodes.some(n => n.id === id));
+
+    if(validIds.length !== currentIds.length)
+    setSelectedNodesIds(validIds);
+});
+
+export const showPropertiesPanel = createMemo(() => selectedNodes().length === 1);
+
+export const activeNode = createMemo(() => showPropertiesPanel()? selectedNodes()[0] : null);
+
+export const toolBeltPosition = createMemo(() => {
+    const nodes = selectedNodes();
+    if(nodes.length === 0) return null;
+
+    const bounds = calculateDiagramBounds(nodes);
+    const wordlPosition = nodusCanvas.camera.wordlToScreen(
+        bounds.x + 50,
+        bounds.y + 50
+    );
+
+    return {x: wordlPosition.x + 20, y: wordlPosition.y - 95};
+});
 
 export const [draggedNodeId, setDraggedNodeId] = createSignal<string | null>(null);
-
-export const selectedNode = () => nodes.find(n => n.id === selectedNodeId());
 
 export const draggedNode = () => nodes.find(n => n.id === draggedNodeId());
 
 export const getNode = (id: string) => nodes.find(n => n.id === id);
 
-export const addNode = (x: number, y : number) => {
+export const ocupadoPor = (id: string | null) => activeUsers.find(u => u.object === id && u.nombre !== userData.name);
+
+export const ocupar = (id:string | null) => {
+    if(ocupadoPor(id)){
+
+        showToast("Nodo bloqueado", ToastType.ERROR);
+
+        return false;
+    }
+
+    if(id){
+        const node = getNode(id);
+        if(node){
+            setSelectedNodesIds([node.id]);
+        }
+    }
+
+    return true;
+}
+
+export const addNode = (x: number, y : number, addToHistory?: boolean) => {
 
     const newID = Math.random().toString(36).substring(6).toUpperCase();
 
@@ -53,7 +99,7 @@ export const addNode = (x: number, y : number) => {
         y,
         width: 160,
         height: 80,
-        color: "#70C8C8",
+        color: "#21a2a6",
         opacity: 1,
         radius: 8,
         lock: false
@@ -72,12 +118,35 @@ export const addNode = (x: number, y : number) => {
             x: x,
             y: y,
             texto: "",
-            color: "#70C8C8",
+            color: "#21a2a6",
             opacidad: 1,
             radius: 8,
             pin: false
         }
     });
+
+    if(addToHistory){
+        pushAction({
+            label: "Crear nodo",
+            undo: () => {
+                deleteNode(newID);
+            },
+            redo: () => {
+                addRemoteNode(
+                    newID,
+                    x,
+                    y,
+                    160,
+                    80,
+                    "",
+                    "#21a2a6",
+                    1,
+                    8,
+                    false
+                );
+            }
+        });
+    }
     
 };
 
@@ -179,10 +248,12 @@ export const finalizeNodePosition = (id: string) => {
         );
 
         sendEvent({
-            tipo: 'mover_nodo',
-            id: id,
-            x: newX,
-            y: newY
+            tipo: 'mover_nodos',
+            nodos: [{
+                id: id,
+                x: newX,
+                y: newY
+            }]
         });
     }
 }
@@ -368,12 +439,15 @@ export const updateHeightFromText = (id: string) => {
 export const lockNode = (id: string, send = true) => {
     setNodes(n => n.id === id, "lock", true);
 
+    
     if(send){
         sendEvent({
             tipo: 'bloquear_nodo',
             id: id
         });
     }
+
+    moveToBack(id);
 }
 
 export const unLockNode = (id: string, send = true) => {
@@ -388,12 +462,69 @@ export const unLockNode = (id: string, send = true) => {
 }
 
 export const jumpToNode = (node: Node) => {
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
 
-    setOffset(centerX - ((node.x + node.width / 2) * scale), centerY - ((node.y + node.height / 2) * scale));
+    const offset = nodusCanvas.camera.offsetToCenterPoint(node.x + node.width / 2, node.y + node.height / 2, 1);
+    nodusCanvas.camera.animateTo(offset.offsetX, offset.offsetY, 1);
 
-    setSelectedNodeId(node.id);
+    ocupar(node.id);
     setSelectedConnectionId(null);
     setIsCommandPaletteOpen(false);
 };
+
+export const deleteAllDisconnected = () => {
+    [...nodes].forEach(node => {
+        if(connectionsByNode(node.id).length === 0){
+            deleteNode(node.id);
+        }
+    });
+}
+
+export const bulkDelete = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        deleteNode(node.id);
+    });
+    showToast(`${targets.length} nodes removed`);
+};
+
+export const bulkFitHeight = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        updateHeightFromText(node.id);
+    });
+};
+
+export const bulkCopy = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        copyNode(node.id);
+    });
+};
+
+export const bulkLock = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        lockNode(node.id);
+    });
+};
+
+export const bulkUnLock = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        unLockNode(node.id);
+    });
+};
+
+export const bulkToFront = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        moveToFront(node.id);
+    });
+}
+
+export const bulkToBack = () => {
+    const targets = selectedNodes();
+    targets.forEach(node => {
+        moveToBack(node.id);
+    });
+}

@@ -1,4 +1,4 @@
-import { addNode, copyNode, deleteNode, getNode, jumpToNode, lockNode, moveToBack, moveToFront, Node, nodes, selectedNode, selectedNodeId, setSelectedNodeId, unLockNode, updateHeightFromText } from '../../../models/nodes';
+import { addNode, bulkCopy, bulkDelete, bulkFitHeight, bulkLock, bulkToBack, bulkToFront, bulkUnLock, getNode, jumpToNode, lockNode, Node, nodes, ocupadoPor, selectedNodes, selectedNodesIds, setSelectedNodesIds, toolBeltPosition, unLockNode } from '../../../models/nodes';
 
 import myLogo from "../../../assets/NodusLogo.png";
 import selectIco from "../../../assets/select.svg";
@@ -21,8 +21,6 @@ import deleteIco from "../../../assets/delete.svg";
 import shareIco from "../../../assets/share.svg";
 import downloadIco from "../../../assets/download.svg";
 
-import { center, wordlToScreen } from '../../../utils/math';
-
 import styles from "../Editor.module.css";
 
 import { updateCurrentProjectName, userData } from '../../../models/userStore';
@@ -31,6 +29,8 @@ import { For, Match, Show, Switch } from 'solid-js';
 import { isCommandPaletteOpen, isEditPanelOpen, isLayersPanelOpen, layerView, mouseOption, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setLayerView, setMouseOption } from '../Editor';
 import { activeUsers } from '../../../models/users';
 import { Connection, connections, deleteConnection, selectedConnectionId, setSelectedConnectionId,  } from '../../../models/connections';
+import { exportDiagramAsPng } from '../../../core/renderer';
+import { nodusCanvas } from '../../../core/NodusCanvas';
 
 export const HEADER = () => {
     return (
@@ -61,8 +61,8 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
             <div class="separator" />
 
             <div class="square" onClick={() => {
-                const point = center();
-                addNode(point.x - 80, point.y - 40);
+                const point = nodusCanvas.camera.getWorldCenter();
+                addNode(point.x - 80, point.y - 40, true);
             }}></div>
 
             <img src={selectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'select' ? styles.selected : ""}`} onClick={(_) => setMouseOption('select')}/>
@@ -100,11 +100,11 @@ export const USER_AVATAR = (nombre: string, color: string) => {
 }
 
 
-export const TOP_BUTTONS = (onExport: () => void, onShare: () => void) => {
+export const TOP_BUTTONS = (onShare: () => void) => {
     return (
         <div class={styles.topButtons}>
             <img src={shareIco} alt="" onClick={onShare}/>
-            <img src={downloadIco} alt="" onClick={onExport}/>
+            <img src={downloadIco} alt="" onClick={exportDiagramAsPng}/>
         </div>
     )
 }
@@ -127,27 +127,27 @@ export const ROOM_ID = () => {
 export const TOOL_BELT = () => {
     return  (
         <Show 
-            when={selectedNode()}>
+            when={selectedNodes().length > 0}>
             <div class={styles.toolBelt}
-                style={{left: `${wordlToScreen(selectedNode()!.x, 0).x + 20}px`,
-                top: `${wordlToScreen(0, selectedNode()!.y).y - 60}px`}}>
+                style={{left: `${toolBeltPosition()?.x}px`,
+                top: `${toolBeltPosition()?.y}px`}}>
                 <div class={styles.toolBeltButton} data-tooltip="Fit height">
-                    <img src={textIco} alt="" onClick={(_) => updateHeightFromText(selectedNode()!.id)}/>
+                    <img src={textIco} alt="" onClick={(_) => bulkFitHeight()}/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Copy">
-                    <img src={copyIco} alt="" onClick={(_) => copyNode(selectedNode()!.id)}/>
+                    <img src={copyIco} alt="" onClick={(_) => bulkCopy()}/>
                 </div>
-                <div class={styles.toolBeltButton} data-tooltip={selectedNode()!.lock? "Unlock" : "Lock"}>
-                    <img src={selectedNode()!.lock? lockIco : unLockIco} alt="" onClick={(_) => selectedNode()!.lock? unLockNode(selectedNode()!.id) : lockNode(selectedNode()!.id)}/>
+                <div class={styles.toolBeltButton} data-tooltip={selectedNodes().some(node => node.lock) ? "Unlock" : "Lock"}>
+                    <img src={selectedNodes().some(node => node.lock)? lockIco : unLockIco} alt="" onClick={(_) => selectedNodes().some(node => node.lock)? bulkUnLock() : bulkLock() }/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Bring to front">
-                    <img src={frontIco} alt="" onClick={(_) => moveToFront(selectedNode()!.id)}/>
+                    <img src={frontIco} alt="" onClick={(_) => bulkToFront() }/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Send to back">
-                    <img src={backIco} alt="" onClick={(_) => moveToBack(selectedNode()!.id)}/>
+                    <img src={backIco} alt="" onClick={(_) => bulkToBack() }/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Delete">
-                    <img src={deleteIco} alt="" onClick={(_) => deleteNode(selectedNode()!.id)}/>
+                    <img src={deleteIco} alt="" onClick={(_) => bulkDelete()}/>
                 </div>
             </div>
         </Show>
@@ -191,11 +191,12 @@ export const LAYERS_PANEL = () => {
 
 const NODE_FRAME = (node: Node) => {
     return (
-        <div class={`${styles.layerItem} ${selectedNodeId() === node.id? styles.selected: ""} `}
+        <div class={`${styles.layerItem} ${selectedNodesIds().includes(node.id)? styles.selected: ""} `}
             onClick={(_) => jumpToNode(node)}
             >
-                <img src={node.lock? lockIco : unLockIco} onClick={(_) => node.lock? unLockNode(node.id) : lockNode(node.id)}/>
-                <p>{`${node.id} - ${node.title?.substring(0, 10)}`}</p>
+                <img src={node.lock? lockIco : unLockIco} onClick={(_) => { if(!ocupadoPor(node.id)) {node.lock? unLockNode(node.id) : lockNode(node.id)}}}/>
+                <span style={{"background-color": node.color}} class={styles.nodeFrameIco}></span>
+                <p>{node.title?.substring(0, 18)}</p>
             </div>
     )
 }
@@ -203,7 +204,7 @@ const NODE_FRAME = (node: Node) => {
 const CONN_FRAME = (conn: Connection) => {
     return (
         <div class={`${styles.layerItem} ${selectedConnectionId() === conn.id? styles.selected: ""} `}
-            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodeId(null)}}
+            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodesIds([])}}
             >
                 <img src={deleteIco} onClick={(_) => deleteConnection(conn.id)}/>
                 <p>{`${getNode(conn.from)?.title || "Empty"} - ${getNode(conn.to)?.title || "Empty"}`}</p>

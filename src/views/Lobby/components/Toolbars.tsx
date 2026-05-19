@@ -9,7 +9,14 @@ export const CREATE_FLOW = (onCreate : () => void, onJoin: () => void) => {
             <button onClick={onCreate} id={style.newFlow}>New Flow</button>
             <label class={style.labelInfo}>- OR -</label>
             <label class={style.inputLabel}>ENTER ROOM ID</label>
-            <input type="text" id={style.roomIdInput} maxLength={"10"} minLength={"10"}/>
+            <input type="text"
+                        autocomplete="off" 
+                        autocorrect="off" 
+                        autocapitalize="off" 
+                        spellcheck="false"  
+                        id={style.roomIdInput} 
+                        maxLength={"10"} 
+                        minLength={"10"}/>
             <button onClick={onJoin} id={style.join}>Join by ID</button>
         </div>
     )
@@ -17,7 +24,12 @@ export const CREATE_FLOW = (onCreate : () => void, onJoin: () => void) => {
 
 export const USERNAME_INPUT = (onChange: () => void) => {
     return (
-        <input type="text" id={style.usernameInput} placeholder="ENTER NAME..." onInput={onChange} value={userData.name}/>
+        <input type="text"
+                autocomplete="off" 
+                autocorrect="off" 
+                autocapitalize="off" 
+                spellcheck="false" 
+                id={style.usernameInput} placeholder="ENTER NAME..." onInput={onChange} value={userData.name}/>
     )
 }
 

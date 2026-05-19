@@ -1,117 +1,222 @@
 import { Properties } from "./components/Properties";
 import { LEFT_TOOLBAR, USERS_PANEL, PROJECT_NAME, TOOL_BELT, LAYERS_PANEL, TOP_BUTTONS  } from "./components/Toolbars";
-import { nodes, updateNodePosition, finalizeNodePosition, setNodes, deleteNode, selectedNode, selectedNodeId, filteredNodes, jumpToNode } from "../../models/nodes";
-import { screenToWorld } from "../../utils/math";
-import { setSelectedNodeId, setDraggedNodeId, draggedNodeId, draggedNode  } from "../../models/nodes";
+import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupar, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
+import { lerp } from "../../utils/math";
+import { setDraggedNodeId, draggedNodeId, draggedNode  } from "../../models/nodes";
 import { addConnection, connections, setConnections, setSelectedConnectionId } from "../../models/connections";
-import { moveNodeThrottle, socket, initSocket, closeSocket } from "../../core/socket";
+import { moveNodeThrottle, socket, initSocket, closeSocket, sendEvent } from "../../core/socket";
 import {  createEffect, createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
-import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText } from "../../core/renderer";
+import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, ANCHOR_POINT, resizingDots, setFocusedPoint, setResizingDots } from "../../core/renderer";
 import "../../App.css";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import styles from "./Editor.module.css";
 import { userData } from "../../models/userStore";
-import { activeIndex, COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette";
+import { COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette";
+import { activeUsers, setActiveUsers } from "../../models/users";
+import { ToastContainer } from "../components/ToastContainer";
+import { showToast } from "../../models/toast";
+import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../../utils/keyboard";
+import { manageResizing } from "../../utils/resizing";
+import { calculateDiagramBounds } from "../../utils/path";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false); 
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
 
 export const [isCommandPaletteOpen, setIsCommandPaletteOpen] = createSignal(false);
-export const [searchQuery, setSearchQuery] = createSignal("");
+
+export const [isResizing, setIsResizing] = createSignal(false);
+export const [referencePoint, setReferencePoint] = createSignal<{x: number, y: number} | null>(null);
+export const [resizingBox, setResizingBox] = createSignal<{x: number, y:number, width:number, height: number}| null>(null);
+export let resizingNodesCopy : Node[] = [];
 
 export const [mouseOption, setMouseOption] = createSignal<'move' | 'select' | 'connect'>('move');
 export const [layerView, setLayerView] = createSignal<'nodes' | 'connections'>('nodes');
 
-export let scale = 1;
-export  let offsetX = 0;
-export  let offsetY = 0;
-
-export const setOffset = (newOffsetX: number, newOffsetY: number) => {
-    offsetX = newOffsetX;
-    offsetY = newOffsetY;
-}
-
-export const setScale = (newScale: number) => {
-    scale = newScale;
-}
-
+export const [mouseDisabled, setMouseDisables] = createSignal(false);
 export let flowConecctions = 0;
+
+export let selectionRect = { x0: 0, y0: 0, x1: 0, y1: 0};
+export let mousePos = { x: 0, y: 0};
 
 export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => {
 
     let isConnecting = false;
+    let isSelecting = false;
+    
     let connectionSourceId: string | null = null;
-    let mousePos = { x: 0, y: 0};
 
     const handleMouseDown = (e: MouseEvent) => {
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
         }
-
         setIsCommandPaletteOpen(false);
         setSelectedConnectionId(null);
 
-        const mouseX = e.offsetX;
-        const mouseY = e.offsetY;
+        const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
-        const {x, y} = screenToWorld(mouseX, mouseY);
+        // Primero verificamos si es un resize
+        const resizingPoint = resizingDots().find(dot => 
+            x <= dot.x + 8 && x >= dot.x - 8 &&
+            y <= dot.y + 8 && y >= dot.y - 8
+        );
+
+        if(resizingPoint){
+            setIsResizing(true);
+            setReferencePoint({x: resizingPoint.x, y: resizingPoint.y});
+            resizingNodesCopy = [...nodes].filter(node => selectedNodesIds().includes(node.id)).map(node => ({...node}));
+            const bounds = calculateDiagramBounds(selectedNodes());
+            setResizingBox({
+                x: bounds.x + 20,
+                y: bounds.y + 20,
+                width: bounds.width - 20,
+                height: bounds.height - 20
+            });
+            return;
+        }
 
         const hit = [...nodes].reverse().find(node =>
             x >= node.x && x <= node.x + node.width &&
             y >= node.y && y <= node.y + node.height
         );
 
-        if(hit && !hit.lock){
-            if(mouseOption() == 'connect'){
+        if(mouseOption() == 'connect'){
+            if(hit && !hit.lock){
                 isConnecting = true;
                 connectionSourceId = hit.id;
-            } else if (mouseOption() == 'move') {
-                setDraggedNodeId(hit.id);
             }
-        } else if (mouseOption() == 'move'){
-            setDraggedNodeId("root");
+            return;
         }
 
-        if(mouseOption() == 'select' && hit){
-            setSelectedNodeId(hit.id);
-            
+        if(hit){
+            const isAlreadySelected = selectedNodesIds().includes(hit.id);
+
+            if(!isAlreadySelected){
+                if(!e.shiftKey){
+                    ocupar(hit.id);
+                } else {
+                    setSelectedNodesIds(prev => [...prev, hit.id]);
+                }
+            }
+
+            if(mouseOption() == 'move' && ocupadoPor(hit.id) === undefined){
+                if(!hit.lock){
+                    setDraggedNodeId(hit.id);
+                }
+            }
         } else {
-            setSelectedNodeId(null);
+            //CLIC AL VACIO
+            if(mouseOption() === 'select'){
+                isSelecting = true;
+                selectionRect = {x0: x, y0: y, x1: x, y1: y};
+            } else if (mouseOption() == 'move'){
+                setDraggedNodeId("root"); //Paneo de camara
+            }
+            setSelectedNodesIds([]);
         }
     }
 
     const handleMouseMove = (e : MouseEvent) => {
 
-        mousePos = screenToWorld(e.offsetX, e.offsetY);
+        if(mouseDisabled()) setMouseDisables(false);
+
+        mousePos = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
+
+        sendEvent({
+            tipo: "mover_cursor",
+            x: mousePos.x,
+            y: mousePos.y,
+            nombre: userData.name
+        });
+
+        //Primero verificamos si es resizing
+        if(isResizing()){
+            manageResizing(mousePos)
+            return;
+        }
+
+        setFocusedPoint(resizingDots().find(dot => 
+            mousePos.x <= dot.x + 8 && mousePos.x >= dot.x - 8 &&
+            mousePos.y <= dot.y + 8 && mousePos.y >= dot.y - 8
+        ) || null);
+
+        if(focusedPoint()){
+            setMouseOption(prev => prev);
+        }
+        
+        if(isSelecting) {
+            selectionRect.x1 = mousePos.x;
+            selectionRect.y1 = mousePos.y;
+            return;
+        }
 
         if(isConnecting) return;
 
         if(draggedNodeId() == null) return;
 
         if(draggedNodeId() == "root"){
-            offsetX += e.movementX;
-            offsetY += e.movementY;
+            nodusCanvas.camera.setOffsetX(prev =>  prev + e.movementX);
+            nodusCanvas.camera.setOffsetY(prev =>  prev + e.movementY);
             return;
         }
 
-        if(draggedNode()!.lock) return;
+        //Arrastre multiple
+        const deltaX = e.movementX / nodusCanvas.camera.zoom();
+        const deltaY = e.movementY / nodusCanvas.camera.zoom();
 
-        const events = (e as any).getCoalescedEvents?.() || [e];
-
-        for(let event of events){
-            updateNodePosition(draggedNodeId()!, event.movementX / scale, event.movementY / scale);
-            moveNodeThrottle(draggedNodeId(), draggedNode()?.x, draggedNode()?.y);
+        if(selectedNodesIds().includes(draggedNodeId()!)){
+            selectedNodes().forEach(node => {
+                if(!node.lock) {
+                    updateNodePosition(node.id, deltaX, deltaY);
+                }
+            });
+            moveNodeThrottle(selectedNodes().map(n => {return {x: n.x, y: n.y, id: n.id}}));
+        } else {
+            updateNodePosition(draggedNodeId()!, deltaX, deltaY);
+            moveNodeThrottle([{id: draggedNode()!.id, x: draggedNode()!.x, y: draggedNode()!.y}]);
         }
 
-    }
+    };
 
     const handleMouseUp = (e : MouseEvent) => {
 
+        if(isResizing()){
+            selectedNodesIds().forEach(id => {
+                finalizeNodePosition(id);
+                finalizeNodeSize(id);
+            })
+            setIsResizing(false);
+            setFocusedPoint(null);
+            setReferencePoint(null);
+            setResizingBox(null);
+            resizingNodesCopy = [];
+        }
+
+        if (isSelecting){
+
+            setSelectedNodesIds(nodes.filter(node => {
+                const minX = Math.min(selectionRect.x0, selectionRect.x1);
+                const maxX = Math.max(selectionRect.x0, selectionRect.x1);
+                const minY = Math.min(selectionRect.y0, selectionRect.y1);
+                const maxY = Math.max(selectionRect.y0, selectionRect.y1);
+
+                return (
+                    node.x < maxX &&
+                    node.x + node.width > minX &&
+                    node.y < maxY &&
+                    node.y + node.height > minY
+                );
+            }).map(it => it.id));
+
+            isSelecting = false;
+
+            return;
+        }
+
         if(isConnecting && connectionSourceId){
-            const {x: mouseX, y: mouseY} = screenToWorld(e.offsetX, e.offsetY);
+            const {x: mouseX, y: mouseY} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
             const target = [...nodes].reverse().find(n => 
                 !n.lock &&
@@ -128,8 +233,9 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         connectionSourceId = null;
 
         if(draggedNodeId()) {
-            setSelectedNodeId(draggedNodeId());
-            finalizeNodePosition(draggedNodeId()!);
+            selectedNodesIds().forEach(nodeID => {
+                finalizeNodePosition(nodeID);
+            });
         }
 
         setDraggedNodeId(null);
@@ -153,25 +259,18 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 e.preventDefault();
                 const ZOOM_SPEED = 0.0008;
                 const delta = -e.deltaY;
-                const oldScale = scale;
+                const oldScale = nodusCanvas.camera.zoom();
 
-                scale += delta * ZOOM_SPEED;
-                scale = Math.min(Math.max(0.1, scale), 5);
+                nodusCanvas.camera.setZoom(prev => prev + delta * ZOOM_SPEED);
+                nodusCanvas.camera.setZoom(prev => Math.min(Math.max(0.1, prev), 5));
 
                 const mouseX = e.offsetX;
                 const mouseY = e.offsetY;
 
-                offsetX -= (mouseX - offsetX) * (scale / oldScale - 1);
-                offsetY -= (mouseY - offsetY) * (scale / oldScale - 1);
-            }, {passive: false});
+                nodusCanvas.camera.setOffsetX(prev => prev - (mouseX - prev) * (nodusCanvas.camera.zoom() / oldScale - 1));
+                nodusCanvas.camera.setOffsetY(prev => prev - (mouseY - prev) * (nodusCanvas.camera.zoom() / oldScale - 1));
 
-            window.addEventListener('keydown', (e) => {
-                if(e.key === 'Delete'){
-                    if(selectedNode() !== undefined){
-                        deleteNode(selectedNode()!.id, true);
-                    }
-                }
-            });
+            }, {passive: false});
 
             
             function draw() {
@@ -200,6 +299,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                             setNodes(n => n.id === node.id, {x : newX, y : newY});
 
                             if(Math.abs(node.x - node.targetX) < 0.1){
+                                setNodes(n => n.id === node.id, { x: node.targetX, y: node.targetY});
                                 setNodes(n => n.id === node.id, { targetX: undefined, targetY: undefined});
                             }
                         }
@@ -248,6 +348,31 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     }
                 });
 
+                setResizingDots([]);
+                if(selectedNodesIds().length > 0){
+                    drawResizingBox(CK, canvas, selectedNodes())
+                }
+
+                if(isSelecting){
+                    drawSelectionRect();
+                }
+
+                drawPings();
+
+                activeUsers.forEach(user => {
+                    if(user.nombre == userData.name) return;
+
+                    if(user.targetX !== undefined){
+                        setActiveUsers(u => u.nombre === user.nombre, {x: lerp(user.x, user.targetX, 0.15)});
+                    }
+
+                    if(user.targetY !== undefined){
+                        setActiveUsers(u => u.nombre === user.nombre, {y: lerp(user.y, user.targetY, 0.15)});
+                    }
+
+                    drawExternalCursor(user.x, user.y, user.color, user.nombre);
+                });
+
                 flowConecctions += 0.015;
                 if(flowConecctions > 1) flowConecctions = 0;
                 
@@ -260,39 +385,24 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     });
 
     onCleanup(() => {
+
         socket?.close();
         closeSocket();
-
-        setSelectedNodeId(null);
+        setSelectedNodesIds([]);
         setDraggedNodeId(null);
         setNodes([]);
         setConnections([]);
     });
 
     onMount(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                e.preventDefault();
-                setIsCommandPaletteOpen(prev => !prev);
-                setSearchQuery("");
-            }
-            if (e.key === 'Escape') setIsCommandPaletteOpen(false);
 
-            const list = filteredNodes().slice().reverse(); 
-            if (list.length === 0) return;
+        initializeEditorKeyboardEvents();
 
-            if (e.key === "ArrowDown") {
-                setActiveIndex((prev) => (prev + 1) % list.length);
-            } else if (e.key === "ArrowUp") {
-                setActiveIndex((prev) => (prev - 1 + list.length) % list.length);
-            } else if (e.key === "Enter") {
-                jumpToNode(list[activeIndex()]);
-            }
-        };
+        onCleanup(() => {
+            
+            removeEditorKeyboardEvents();
 
-        window.addEventListener('keydown', handleKeyDown);
-
-        onCleanup(() => window.removeEventListener('keydown', handleKeyDown));
+        });
     });
 
     const appWindow = getCurrentWindow();
@@ -307,27 +417,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         props.onNavigate('lobby');
     }
 
-    const onExport = () => {
-        const data = {
-            name: userData.currentProjectName,
-            nodes: nodes,
-            connections: connections
-        };
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `nodus_${userData.roomId}.json`;
-        link.click();
-        console.log("Downloading");
-        alert("Downloading diagram");
-    }
-
     const handleShare = async () => {
-        const shareData = {
+        const shareData : ShareData = {
             title: `Nodus Flow - ${userData.currentProjectName}`,
-            text: `¡Únete a mi mesa de diseño en Nodus Flow!\nSala: ${userData.currentProjectName}\nID: ${userData.roomId}`,
-            url: window.location.href, // O el link específico si tienes routing
+            text: `Join my design team at Nodus Flow!!\nRoom: ${userData.currentProjectName}\nID: ${userData.roomId}`,
+            url: `https://render-yqtz.onrender.com/views/share.html?d=${userData.roomId}`, // O el link específico si tienes routing
         };
 
         try {
@@ -337,7 +431,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 await navigator.clipboard.writeText(
                     `${shareData.text}\nLink: ${shareData.url}`
                 );
-            alert("Invitación copiada al portapapeles (Tu navegador no soporta Share)");
+            showToast("Invitation copied to clipboard");
             }
         } catch (err) {
             console.error("Error al compartir:", err);
@@ -345,27 +439,60 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     };
 
     createEffect(() => {
-        const id = selectedNodeId();
+        const id = activeNode();
         if (id && isLayersPanelOpen()) {
             const el = document.getElementById(`layer-${id}`);
             el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
-    });
 
+        sendEvent({
+            "tipo": "seleccionar_nodo",
+            "id": id?.id || null
+        });
+    });
+    
     createEffect(() => {
         const mouse = mouseOption();
+        let cursor = 'default';
 
-        if(mouse == 'connect'){
-            nodusCanvas.canvasRef.style.cursor = 'crosshair';
-        } else if (mouse == 'move'){
-            if(draggedNodeId()){
-                nodusCanvas.canvasRef.style.cursor = 'grabbing';
-            } else {
-                nodusCanvas.canvasRef.style.cursor = 'grab';
+        if(focusedPoint() !== null){
+
+            switch(focusedPoint()?.direction){
+                case ANCHOR_POINT.TOP:
+                    cursor = "n-resize";
+                    break;
+                case ANCHOR_POINT.BOTTOM:
+                    cursor = "s-resize";
+                    break;
+                case ANCHOR_POINT.LEFT:
+                    cursor = "e-resize";
+                    break;
+                case ANCHOR_POINT.RIGHT:
+                    cursor = "w-resize";
+                    break;
+                case ANCHOR_POINT.TOP_LEFT:
+                    cursor = "se-resize";
+                    break;
+                case ANCHOR_POINT.TOP_RIGHT:
+                    cursor = "sw-resize";
+                    break;
+                case ANCHOR_POINT.BOTTOM_LEFT:
+                    cursor = "ne-resize";
+                    break;
+                case ANCHOR_POINT.BOTTOM_RIGHT:
+                    cursor = "nw-resize";
+                    break;
             }
         } else {
-            nodusCanvas.canvasRef.style.cursor = 'default';
+
+            if(mouse == 'connect'){
+                cursor = 'crosshair';
+            } else if (mouse == 'move'){
+                cursor = draggedNodeId() !== null? 'grabbing' : 'grab';
+            }
         }
+            
+        nodusCanvas.canvasRef.style.cursor = cursor;
     });
 
     createEffect(() => {
@@ -381,7 +508,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             <div class={styles.topRightToolbar}>
                 { USERS_PANEL() }
 
-                { TOP_BUTTONS(onExport, handleShare) }
+                { TOP_BUTTONS(handleShare) }
             </div>
 
             { LEFT_TOOLBAR(onFullScrren, onHome) }
@@ -402,6 +529,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             { TOOL_BELT() }
 
             { LAYERS_PANEL() }
+
+            { ToastContainer() }
 
         </div>
     );

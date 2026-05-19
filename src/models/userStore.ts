@@ -1,5 +1,8 @@
 import { createStore } from "solid-js/store";
 import { sendEvent } from "../core/socket";
+import { nodes } from "./nodes";
+import { connections } from "./connections";
+import { showToast, ToastType } from "./toast";
 
 
 const savedName = localStorage.getItem("nodus_username") || "";
@@ -40,3 +43,19 @@ export const updateCurrentProjectName = (newProjectName: string, send = true) =>
 }
 
 export { userData };
+
+export const exportAsJson = () => {
+    const data = {
+        name: userData.currentProjectName,
+        nodes: nodes,
+        connections: connections
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `nodus_${userData.roomId}.json`;
+    link.click();
+    console.log("Exporting JSON");
+    showToast("Exporting JSON", ToastType.SUCCES);
+}

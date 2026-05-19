@@ -7,7 +7,6 @@ import style from "./Lobby.module.css";
 import { generateRandomRoomId } from "../../utils/network";
 import { updateRoomId, updateUserName, userData } from "../../models/userStore";
 import { setViewMouseHandlers } from "../../utils/mouse";
-import { setOffset, setScale } from "../Editor/Editor";
 
 let mousePos = {
     x: 0,
@@ -96,8 +95,9 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
         onMove: (e) => mousePos = {x: e.offsetX, y: e.offsetY}
     })
 
-    setOffset(0, 0);
-    setScale(1);
+    nodusCanvas.camera.setOffsetX(0);
+    nodusCanvas.camera.setOffsetY(0);
+    nodusCanvas.camera.setZoom(1);
 
     return (
         

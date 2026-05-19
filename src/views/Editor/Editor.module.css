@@ -155,6 +155,12 @@
     margin: 0;
 }
 
+.nodeFrameIco {
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+}
+
 .layersLabels {
     width: 100%;
     display: flex;
@@ -325,7 +331,7 @@
     pointer-events: auto;
     cursor: pointer;
     position: relative;
-    padding-left: 18px;
+    padding-left: 30px;
 }
 
 .searchItem.selected {
@@ -337,7 +343,7 @@
     position: absolute;
     top: 20%;
     height: 60%;
-    width: 4px;
+    width: 16px;
     border-radius: 2px;
     left: 5px;
     background: var(--node-color);
@@ -397,4 +403,8 @@
 .propertiesScroll::-webkit-scrollbar-thumb {
     background-color: #ccc;
     border-radius: 20px;
+}
+
+.disableHover * {
+    pointer-events: none;
 }

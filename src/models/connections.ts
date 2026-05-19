@@ -58,3 +58,7 @@ export const deleteConnection = (id: string, send = true) => {
         });
     }
 }
+
+export const connectionsByNode = (nodeId: string) => {
+    return connections.filter(conn => conn.from === nodeId || conn.to == nodeId);
+}

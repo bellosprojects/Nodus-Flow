@@ -1,8 +1,8 @@
 import CanvasKitInit, {Surface, FontMgr, CanvasKit} from "canvaskit-wasm";
 import { getFontData } from "./engine";
 import { drawBackground } from "./renderer";
-import { offsetX, offsetY, scale } from "../views/Editor/Editor";
 import { mouseEvents } from "../utils/mouse";
+import { createCameraStore } from "./camera";
 
 class NodusCanvas {
     private CK!: CanvasKit;
@@ -11,6 +11,7 @@ class NodusCanvas {
     private draw: Function | null = null;
     private font: FontMgr | null = null;
     public canvasRef!: HTMLCanvasElement;
+    public camera = createCameraStore();
 
     async init(canvasElement: HTMLCanvasElement){
 
@@ -39,15 +40,13 @@ class NodusCanvas {
         if(this.sufrace){
 
             const canvas = this.sufrace.getCanvas();
-            const dpr = window.devicePixelRatio || 1;
 
             canvas.save();
 
-            canvas.clear(this.CK.Color(1, 3, 5));
+            canvas.clear(this.CK.Color(2, 27, 48));
             drawBackground();
 
-            canvas.translate(offsetX, offsetY);
-            canvas.scale(dpr * scale, dpr * scale);
+            this.camera.applyToCanvas(canvas);
 
             if(this.draw){
                 this.draw();
@@ -62,16 +61,15 @@ class NodusCanvas {
     }
 
     resize = () => {
-        const dpr = window.devicePixelRatio || 1;
-        const width = window.innerWidth;
-        const height = window.innerHeight;
 
         if(!this.canvasRef) return;
         
-        this.canvasRef.width = width * dpr;
-        this.canvasRef.height = height * dpr;
-        this.canvasRef.style.width = `${width}px`;
-        this.canvasRef.style.height = `${height}px`;
+        const cssWidth = window.innerWidth;
+        const cssHeight = window.innerHeight;
+        const dpr = this.camera.getDPR();
+
+        this.canvasRef.width = cssWidth * dpr;
+        this.canvasRef.height = cssHeight * dpr;
 
         this.sufrace?.delete();
 

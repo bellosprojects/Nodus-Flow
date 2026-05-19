@@ -1,5 +1,3 @@
-import { offsetX, offsetY, scale } from "../views/Editor/Editor";
-
 export const GRID_SIZE = 20;
 
 export const snapToGrid = (value : number) => {
@@ -11,22 +9,4 @@ export const snapPoint = (x: number, y : number) => ({
     y: snapToGrid(y),
 });
 
-export const screenToWorld = (mouseX: number, mouseY: number) => {
-    const dpr = window.devicePixelRatio || 1;
-    return {
-        x: (mouseX - offsetX / dpr) / (scale),
-        y: (mouseY - offsetY / dpr) / (scale)
-    };
-};
-
-export const center = () => {
-    return screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
-}
-
-export const wordlToScreen = (wordlX: number, wordlY: number) => {
-    const dpr = window.devicePixelRatio || 1;
-    return {
-        x: wordlX * scale + offsetX / dpr,
-        y: wordlY * scale + offsetY / dpr
-    }
-}
+export const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor;
