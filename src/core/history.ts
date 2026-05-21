@@ -44,17 +44,4 @@ export const performRedo = () => {
     setUndoStack(prev => [...prev, lastAction]);
 }
 
-export const historyListeners = (e : KeyboardEvent) => {
-    if(e.ctrlKey || e.metaKey){
-        if(e.key === 'z'){
-            e.preventDefault();
-            performUndo();
-        }
-        if(e.key === 'y' || (e.shiftKey && e.key === 'z')){
-            e.preventDefault();
-            performRedo();
-        }
-    }
-}
-
 export { undoStack, redoStack};

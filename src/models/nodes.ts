@@ -89,7 +89,7 @@ export const ocupar = (id:string | null) => {
     return true;
 }
 
-export const addNode = (x: number, y : number, addToHistory?: boolean) => {
+export const addNode = (x: number, y : number, addToHistory?: boolean, name? : string) => {
 
     const newID = Math.random().toString(36).substring(6).toUpperCase();
 
@@ -102,7 +102,8 @@ export const addNode = (x: number, y : number, addToHistory?: boolean) => {
         color: "#21a2a6",
         opacity: 1,
         radius: 8,
-        lock: false
+        lock: false,
+        title: name
     };
 
     setNodes([...nodes, newNode]);
@@ -117,7 +118,7 @@ export const addNode = (x: number, y : number, addToHistory?: boolean) => {
             h: 80,
             x: x,
             y: y,
-            texto: "",
+            texto: name || "",
             color: "#21a2a6",
             opacidad: 1,
             radius: 8,
@@ -138,11 +139,11 @@ export const addNode = (x: number, y : number, addToHistory?: boolean) => {
                     y,
                     160,
                     80,
-                    "",
+                    name || "",
                     "#21a2a6",
                     1,
                     8,
-                    false
+                    false,
                 );
             }
         });

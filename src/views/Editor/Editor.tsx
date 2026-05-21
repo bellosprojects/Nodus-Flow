@@ -120,8 +120,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
     const handleMouseMove = (e : MouseEvent) => {
 
-        if(mouseDisabled()) setMouseDisables(false);
-
         mousePos = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
         sendEvent({
@@ -398,9 +396,17 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
         initializeEditorKeyboardEvents();
 
+        const handlerGlobalMouseMove = (_: MouseEvent) => {
+            if(mouseDisabled()) setMouseDisables(false);
+        }
+
+        document.addEventListener('mousemove', handlerGlobalMouseMove);
+
         onCleanup(() => {
             
             removeEditorKeyboardEvents();
+
+            document.removeEventListener('mousemove', handlerGlobalMouseMove);
 
         });
     });

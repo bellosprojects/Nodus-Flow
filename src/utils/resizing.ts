@@ -4,10 +4,7 @@ import { referencePoint, resizingBox, resizingNodesCopy } from "../views/Editor/
 
 /*
 
-unidad * X + 60 = grande
-
-X = (grande - 60) / unidad
-
+(unidad / anchoOriginal) * nuevoAncho
 
 */
 
@@ -20,30 +17,177 @@ export const manageResizing = (mousePos: {x: number, y: number}) => {
     if(focusedPoint()?.direction === ANCHOR_POINT.RIGHT){
 
         const box = resizingBox()!;
-        const newAncho = mousePos.x - box.x;
+        const nuevoAncho = mousePos.x - box.x - 60;
+        const anchoOriginal = referencePoint()!.x - box.x - 60;
+
+        const calc = (unidad: number) => (unidad / anchoOriginal) * nuevoAncho;
 
         selectedNodes().forEach(node => {
             const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
 
             if(originalNode){
-                const originalLeft = originalNode.x - box.x - 30;
-                const originalRight = originalNode.x + originalNode.width - box.x - 30;
 
-                const newLeft = box.x + 30 + (originalLeft === 0? 0 : (newAncho - 60));
-                const newRight = box.x + 30 + (originalRight === 0? 0 : (newAncho - 60));
-                const newWidth = Math.max(20, newRight - newLeft);
+                const newX = box.x + 30 + calc(originalNode.x - box.x - 30);
 
-                updateNodoAbsolutePosition(node.id, newLeft, node.y);
-                updateNodeSize(node.id, newWidth, node.height);
+                updateNodoAbsolutePosition(node.id, newX, originalNode.y);
+                updateNodeSize(node.id, Math.max(calc(originalNode.width), 60), Math.max(originalNode.height, 40));
             }
         });
 
     } else if(focusedPoint()?.direction === ANCHOR_POINT.BOTTOM){
 
-        selectedNodes().forEach(node => {
-            
-            updateNodeSize(node.id, node.width, mousePos.y - node.y - 30);
+        const box = resizingBox()!;
+        const nuevoAlto = mousePos.y - box.y - 60;
+        const altoOriginal = referencePoint()!.y - box.y - 60;
 
+        const calc = (unidad: number) => (unidad / altoOriginal) * nuevoAlto;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newY = box.y + 30 + calc(originalNode.y - box.y - 30);
+
+                updateNodoAbsolutePosition(node.id, originalNode.x, newY);
+                updateNodeSize(node.id, Math.max(originalNode.width, 60), Math.max(calc(originalNode.height), 40));
+            }
+        });
+
+    } else if(focusedPoint()?.direction == ANCHOR_POINT.BOTTOM_RIGHT){
+
+        const box = resizingBox()!;
+        const nuevoAlto = mousePos.y - box.y - 60;
+        const altoOriginal = referencePoint()!.y - box.y - 60;
+        const nuevoAncho = mousePos.x - box.x - 60;
+        const anchoOriginal = referencePoint()!.x - box.x - 60;
+
+        const calcY = (unidad: number) => (unidad / altoOriginal) * nuevoAlto;
+        const calcX = (unidad: number) => (unidad / anchoOriginal) * nuevoAncho;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newY = box.y + 30 + calcY(originalNode.y - box.y - 30);
+                const newX = box.x + 30 + calcX(originalNode.x - box.x - 30);
+
+                updateNodoAbsolutePosition(node.id, newX, newY);
+                updateNodeSize(node.id, Math.max(calcX(originalNode.width), 60), Math.max(calcY(originalNode.height), 40));
+            }
+        });
+
+    } else if(focusedPoint()?.direction == ANCHOR_POINT.LEFT){
+
+        const box = resizingBox()!;
+        const nuevoAncho = box.x + box.width - mousePos.x - 60;
+        const anchoOriginal = box.x + box.width - referencePoint()!.x - 60;
+
+        const calc = (unidad: number) => (unidad / anchoOriginal) * nuevoAncho;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newX = mousePos.x + 30 + calc(originalNode.x - box.x - 30);
+
+                updateNodoAbsolutePosition(node.id, newX, originalNode.y);
+                updateNodeSize(node.id, Math.max(calc(originalNode.width), 60), Math.max(originalNode.height, 40));
+            }
+        });
+
+    } else if(focusedPoint()?.direction == ANCHOR_POINT.TOP){
+
+        const box = resizingBox()!;
+        const nuevoAlto = box.y + box.height - mousePos.y - 60;
+        const altoOriginal = box.y + box.height - referencePoint()!.y - 60;
+
+        const calc = (unidad: number) => (unidad / altoOriginal) * nuevoAlto;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newY = mousePos.y + 30 + calc(originalNode.y - box.y - 30);
+
+                updateNodoAbsolutePosition(node.id, originalNode.x, newY);
+                updateNodeSize(node.id, Math.max(originalNode.width, 60), Math.max(calc(originalNode.height), 40));
+            }
+        });
+
+    } else if(focusedPoint()?.direction == ANCHOR_POINT.TOP_RIGHT){
+
+        const box = resizingBox()!;
+        const nuevoAlto = box.y + box.height - mousePos.y - 60;
+        const altoOriginal = box.y + box.height - referencePoint()!.y - 60;
+        const nuevoAncho = mousePos.x - box.x - 60;
+        const anchoOriginal = referencePoint()!.x - box.x - 60;
+
+        const calcY = (unidad: number) => (unidad / altoOriginal) * nuevoAlto;
+        const calcX = (unidad: number) => (unidad / anchoOriginal) * nuevoAncho;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newY = mousePos.y + 30 + calcY(originalNode.y - box.y - 30);
+                const newX = box.x + 30 + calcX(originalNode.x - box.x - 30);
+
+                updateNodoAbsolutePosition(node.id, newX, newY);
+                updateNodeSize(node.id, Math.max(calcX(originalNode.width), 60), Math.max(calcY(originalNode.height), 40));
+            }
+        });
+
+    } else if(focusedPoint()?.direction == ANCHOR_POINT.BOTTOM_LEFT){
+
+        const box = resizingBox()!;
+        const nuevoAlto = mousePos.y - box.y - 60;
+        const altoOriginal = referencePoint()!.y - box.y - 60;
+        const nuevoAncho = box.x + box.width - mousePos.x - 60;
+        const anchoOriginal = box.x + box.width - referencePoint()!.x - 60;
+
+        const calcY = (unidad: number) => (unidad / altoOriginal) * nuevoAlto;
+        const calcX = (unidad: number) => (unidad / anchoOriginal) * nuevoAncho;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newY = box.y + 30 + calcY(originalNode.y - box.y - 30);
+                const newX = mousePos.x + 30 + calcX(originalNode.x - box.x - 30);
+
+                updateNodoAbsolutePosition(node.id, newX, newY);
+                updateNodeSize(node.id, Math.max(calcX(originalNode.width), 60), Math.max(calcY(originalNode.height), 40));
+            }
+        });
+
+    } else if(focusedPoint()?.direction == ANCHOR_POINT.TOP_LEFT){
+
+        const box = resizingBox()!;
+        const nuevoAlto = box.y + box.height - mousePos.y - 60;
+        const altoOriginal = box.y + box.height - referencePoint()!.y - 60;
+        const nuevoAncho = box.x + box.width - mousePos.x - 60;
+        const anchoOriginal = box.x + box.width - referencePoint()!.x - 60;
+
+        const calcY = (unidad: number) => (unidad / altoOriginal) * nuevoAlto;
+        const calcX = (unidad: number) => (unidad / anchoOriginal) * nuevoAncho;
+
+        selectedNodes().forEach(node => {
+            const originalNode = resizingNodesCopy.find(originalNode => originalNode.id === node.id);
+
+            if(originalNode){
+
+                const newY = mousePos.y + 30 + calcY(originalNode.y - box.y - 30);
+                const newX = mousePos.x + 30 + calcX(originalNode.x - box.x - 30);
+
+                updateNodoAbsolutePosition(node.id, newX, newY);
+                updateNodeSize(node.id, Math.max(calcX(originalNode.width), 60), Math.max(calcY(originalNode.height), 40));
+            }
         });
 
     }

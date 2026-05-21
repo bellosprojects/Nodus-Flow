@@ -404,7 +404,3 @@
     background-color: #ccc;
     border-radius: 20px;
 }
-
-.disableHover * {
-    pointer-events: none;
-}

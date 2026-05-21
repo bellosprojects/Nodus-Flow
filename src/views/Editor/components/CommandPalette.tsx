@@ -2,7 +2,7 @@ import styles from "../Editor.module.css";
 import { mouseDisabled, setIsCommandPaletteOpen  } from "../Editor";
 
 import searchIco from "../../../assets/search.svg";
-import { Accessor, createMemo, createSignal, For } from "solid-js";
+import { Accessor, createEffect, createMemo, createSignal, For } from "solid-js";
 import { deleteAllDisconnected, deleteNode, jumpToNode, lockNode, nodes, selectedNodesIds, setSelectedNodesIds, unLockNode } from "../../../models/nodes";
 import { exportDiagramAsPng } from "../../../core/renderer";
 import { connections, deleteConnection } from "../../../models/connections";
@@ -10,6 +10,7 @@ import { exportAsJson } from "../../../models/userStore";
 import { nodusCanvas } from "../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../utils/path";
 import { performRedo, performUndo, redoStack, undoStack } from "../../../core/history";
+import { createNodesFromCommand } from "../../../utils/commands";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);
 export const [searchQuery, setSearchQuery] = createSignal("");
@@ -18,8 +19,7 @@ export type OmniItem = {
     id: string,
     label: string,
     type: 'NODE' | 'COMMAND',
-    action: () => void,
-    group: string,
+    action: (arg?: string) => void,
     color?: string
 }
 
@@ -35,30 +35,31 @@ enum CommandID {
     SelectAll = "SELECT_ALL",
     InverstSelect = "SELECT_INVERT",
     Undo = "UNDO",
-    Redo = "REDO"
+    Redo = "REDO",
+    CreateNode = "CREATE_NODE"
 }
 
-const COMMANDS_BASE: Record<CommandID, {label: string; action: () => void, color?: string}> = {
+const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) => void, color?: string}> = {
     [CommandID.ExportPng]: {
         label: 'Export: PNG',
-        action: () => exportDiagramAsPng(),
+        action: (_?: string) => exportDiagramAsPng(),
         color: "#977e2c"
     },
     [CommandID.ExportJson]: {
         label: 'Export: JSON',
-        action: () => exportAsJson(),
+        action: (_?: string) => exportAsJson(),
         color: "#97572c"
     },
     [CommandID.DelAllDisconnected]: {
         label: 'Delete Disconnected',
-        action: () => {
+        action: (_?: string) => {
             deleteAllDisconnected();
         },
         color: "#aa2f10"
     },
     [CommandID.ResetView]: {
         label: 'Center Camera',
-        action: () => {
+        action: (_?: string) => {
             const bounds = calculateDiagramBounds([...nodes]);
             const diagramCenter = nodusCanvas.camera.getDiagramCenter();
             const zoom = Math.min(nodusCanvas.camera.zoomToFit(bounds.width, bounds.height), 1);
@@ -70,7 +71,7 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: () => void, color
     },
     [CommandID.ClearCanvas]: {
         label: 'Clear Canvas',
-        action: () => {
+        action: (_?: string) => {
             [...nodes].forEach(node => deleteNode(node.id));
             [...connections].forEach(conn => deleteConnection(conn.id));
         },
@@ -78,31 +79,31 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: () => void, color
     },
     [CommandID.LockAll]: {
         label: 'Lock All nodes',
-        action: () => {
+        action: (_?: string) => {
             [...nodes].forEach(node => lockNode(node.id));
         },
         color: "#252421"
     },
     [CommandID.UnLockAll]: {
         label: 'Unlock All nodes',
-        action: () => {
+        action: (_?: string) => {
             [...nodes].forEach(node => unLockNode(node.id));
         },
         color: "#1a610c"
     },
     [CommandID.Deseclect]: {
         label: 'Select: None',
-        action: () => setSelectedNodesIds([]),
+        action: (_?: string) => setSelectedNodesIds([]),
         color: "#7c7c7c38"
     },
     [CommandID.SelectAll]: {
         label: 'Select: All',
-        action: () => setSelectedNodesIds([...nodes].map(it => it.id)),
+        action: (_?: string) => setSelectedNodesIds([...nodes].map(it => it.id)),
         color: "#096894"
     },
     [CommandID.InverstSelect]: {
         label: 'Select: Invert',
-        action: () => {
+        action: (_?: string) => {
             const currentIds = selectedNodesIds();
             const invertedIds = [...nodes].filter(n => !currentIds.includes(n.id)).map(it => it.id);
             setSelectedNodesIds(invertedIds);
@@ -111,15 +112,22 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: () => void, color
     },
     [CommandID.Undo]: {
         label: `Undo: ${undoStack()[0]?.label || ""}`,
-        action: () => {
+        action: (_?: string) => {
             performUndo();
         }
     },
     [CommandID.Redo]: {
         label: `Redo: ${redoStack()[0]?.label || ""}`,
-        action: () => {
+        action: (_?: string) => {
             performRedo();
         }
+    },
+    [CommandID.CreateNode]: {
+        label: "Create Node: ",
+        action: (arg?: string) => {
+            createNodesFromCommand(arg);
+        },
+        color: "#456733"
     }
 
 }
@@ -130,18 +138,34 @@ export const filteredItems = createMemo(() => {
 
     if(q[0] === '>'){
 
-        q = q.substring(1);
+        const full = q.substring(1).trim();
+        const parts = full.split(':');
+        const cmdQuery = parts[0].trim().toLowerCase();
+        const arg = parts.slice(1).join(':').trim();
 
-        const cmdItems: OmniItem[] = Object.entries(COMMANDS_BASE).map(([id, cmd]) => ({
-            id,
-            label: cmd.label,
-            type: 'COMMAND',
-            action: cmd.action,
-            group: 'Actions',
-            color: cmd.color
-        }));
+        const cmdItems: OmniItem[] = Object.entries(COMMANDS_BASE).map(([id, cmd]) => {
+            // base label is the part before any ':' in the command definition
+            const baseLabel = (cmd.label || '').split(':')[0].trim();
+            const displayLabel = arg ? `${baseLabel}: ${arg}` : cmd.label;
 
-        return cmdItems.filter(item => item.label.toLowerCase().includes(q));
+            return ({
+                id,
+                label: displayLabel,
+                type: 'COMMAND',
+                action: () => cmd.action(arg),
+                color: cmd.color
+            });
+        });
+
+        //Quitar repetidos
+        const whitoutRepeatsCmdItems : OmniItem[] = [];
+
+        cmdItems.forEach(item => {
+            if(whitoutRepeatsCmdItems.every(i => i.label !== item.label)) whitoutRepeatsCmdItems.push(item);
+        });
+
+        // match against the base command name or full label
+        return whitoutRepeatsCmdItems.filter(item => item.label.toLowerCase().includes(cmdQuery) || item.label.toLowerCase().includes(full.toLowerCase()));
     }
 
     const nodeItems: OmniItem[] = nodes.map(node => ({
@@ -149,7 +173,6 @@ export const filteredItems = createMemo(() => {
         label: `Go to: ${node.title || "Empty"} - ${node.id}`,
         type: 'NODE',
         action: () => jumpToNode(node),
-        group: 'Nodes',
         color: node.color
     }));
 
@@ -164,6 +187,14 @@ export const onSelectedItem = (item: OmniItem) => {
 }
 
 export const COMMAND_PALETTE = () => {
+
+    createEffect(() => {
+
+        const items = filteredItems();
+
+        if(activeIndex() >= items.length) setActiveIndex(items.length - 1);
+    });
+
     return (
 
         <div
@@ -178,6 +209,7 @@ export const COMMAND_PALETTE = () => {
                         spellcheck="false" 
                         id="search" 
                         placeholder="Search objects by name..."
+                        value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}/>
             </div>
 
@@ -191,7 +223,7 @@ export const COMMAND_PALETTE = () => {
             </div>
         </div>
 
-    )
+    );
 }
 
 const SEARCH_ITEM = (item: OmniItem, index: Accessor<number>) => {
@@ -201,11 +233,10 @@ const SEARCH_ITEM = (item: OmniItem, index: Accessor<number>) => {
             style={{"--node-color": item.color || "#444"}} 
             classList={{
                 [styles.searchItem]: true, 
-                [styles.selected]: index() == activeIndex(),
-                [styles.disableHover]: !mouseDisabled()
+                [styles.selected]: index() == activeIndex()
             }} 
             onClick={(_) => onSelectedItem(item)} 
-            onMouseEnter={() => setActiveIndex(index)}>
+            onMouseEnter={() => { if(!mouseDisabled()) setActiveIndex(index) }}>
             {item.label}
         </div>
     )

@@ -1,13 +1,12 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { historyListeners } from "../core/history";
-import { nodes, selectedNodesIds, setSelectedNodesIds } from "../models/nodes";
-import { deleteNode } from "../models/nodes";
+import { nodes, selectedNodesIds, setSelectedNodesIds, deleteNode } from "../models/nodes";
 import { mousePos, setIsCommandPaletteOpen, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
 import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette";
 import { activeUsers } from "../models/users";
 import { userData } from "../models/userStore";
 import { addPing } from "../models/ping";
 import { connectionsByNode } from "../models/connections";
+import { performRedo, performUndo } from "../core/history";
 
 async function fullScreenEvent(e: KeyboardEvent){
 
@@ -58,17 +57,26 @@ function navigateCommandPaletteEvent(e: KeyboardEvent){
     if (list.length === 0) return;
 
     if (e.key === "ArrowDown") {
+        e.preventDefault();
         setMouseDisables(true);
         setActiveIndex((prev) => (prev + 1) % list.length);
         const el = document.getElementById(list[activeIndex()].id);
         el?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === "ArrowUp") {
+        e.preventDefault();
         setMouseDisables(true);
         setActiveIndex((prev) => (prev - 1 + list.length) % list.length);
         const el = document.getElementById(list[activeIndex()].id);
         el?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === "Enter") {
         onSelectedItem(list[activeIndex()]);
+    } else if(e.key === "Tab"){
+        e.preventDefault();
+
+        if(activeIndex() >= filteredItems().length) return;
+
+        setSearchQuery(`> ${filteredItems()[activeIndex()].label}`);
+
     }
 }
 
@@ -100,6 +108,19 @@ function nodeSelectionsEvent(e: KeyboardEvent){
             setSelectedNodesIds(invertedIds);
         } else if(e.key === 'u'){
             setSelectedNodesIds([...nodes].filter(node => connectionsByNode(node.id).length === 0).map(node => node.id));
+        }
+    }
+}
+
+function historyListeners(e : KeyboardEvent){
+    if(e.ctrlKey || e.metaKey){
+        if(e.key === 'z'){
+            e.preventDefault();
+            performUndo();
+        }
+        if(e.key === 'y' || (e.shiftKey && e.key === 'z')){
+            e.preventDefault();
+            performRedo();
         }
     }
 }
