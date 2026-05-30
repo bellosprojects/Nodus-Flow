@@ -1,12 +1,12 @@
 import { Lobby } from "./views/Lobby/Lobby";
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { Editor } from "./views/Editor/Editor";
-import "./App.css";
 import { nodusCanvas } from "./core/NodusCanvas";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { showToast } from "./models/toast";
 import { updateRoomId } from "./models/userStore";
 import { initializeGlobalKeyboardEvents, removeGlobalKeyboardEvents } from "./utils/keyboard";
+import "./App.css";
 
 const startView : 'lobby' | 'editor' = 'lobby';
 
@@ -56,7 +56,7 @@ function App() {
                 }}
             />
 
-      
+    
             <Switch>
                 <Match when={currentView() === 'lobby'}>
                     <Lobby onNavigate={handleNavigate}/>
@@ -67,7 +67,7 @@ function App() {
                 </Match>
             </Switch>
 
-      </div>
+        </div>
     );
 }
 

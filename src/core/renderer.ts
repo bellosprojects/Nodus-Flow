@@ -6,7 +6,7 @@ import { obtenerColorTexto } from "../utils/color";
 import { GRID_SIZE } from "../utils/math";
 import { flowConecctions, selectionRect } from "../views/Editor/Editor";
 import { nodusCanvas } from "../core/NodusCanvas";
-import { connections, selectedConnectionId } from "../models/connections";
+import { Connection, connections, selectedConnectionId } from "../models/connections";
 import { pings } from "../models/ping";
 import { removeToast, showToast, ToastType } from "../models/toast";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -18,24 +18,77 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
     const color = HexToColor(node.color);
     const paint = new CK.Paint();
 
-    paint.setColor(CK.Color(color[0], color[1], color[2], node.opacity));
     paint.setAntiAlias(true);
     paint.setDither(true);
 
-    const rect = CK.RRectXY(CK.LTRBRect(node.x, node.y, node.x + node.width, node.y + node.height), node.radius, node.radius);
+    const fillColor = CK.Color(color[0], color[1], color[2], node.opacity);
+    const rectBounds = CK.LTRBRect(node.x, node.y, node.x + node.width, node.y + node.height);
 
-    canvas.drawRRect(rect, paint);
-    
+    let shapePath: any = null;
+
+    // Draw shape based on node.style
+    switch(node.style){
+        case 2: // ellipse
+            paint.setColor(fillColor);
+            paint.setStyle(CK.PaintStyle.Fill);
+            canvas.drawOval(rectBounds, paint);
+            break;
+        case 3: // diamond (rombo)
+            paint.setColor(fillColor);
+            paint.setStyle(CK.PaintStyle.Fill);
+            shapePath = new CK.Path();
+            const cx = node.x + node.width / 2;
+            const cy = node.y + node.height / 2;
+            shapePath.moveTo(cx, node.y);
+            shapePath.lineTo(node.x + node.width, cy);
+            shapePath.lineTo(cx, node.y + node.height);
+            shapePath.lineTo(node.x, cy);
+            shapePath.close();
+            canvas.drawPath(shapePath, paint);
+            break;
+        case 4: // recuadro (border only)
+            paint.setColor(fillColor);
+            paint.setStyle(CK.PaintStyle.Stroke);
+            paint.setStrokeWidth(2);
+            const rrectBorder = CK.RRectXY(rectBounds, node.radius, node.radius);
+            canvas.drawRRect(rrectBorder, paint);
+            break;
+        default: // rectangle (default behavior)
+            paint.setColor(fillColor);
+            paint.setStyle(CK.PaintStyle.Fill);
+            const rrect = CK.RRectXY(rectBounds, node.radius, node.radius);
+            canvas.drawRRect(rrect, paint);
+    }
+
+    // Overlays: occupied / selected
     if(!isExport){
         const user = ocupadoPor(node.id);
 
         if(user){
             paint.setAlphaf(1);
             paint.setStyle(CK.PaintStyle.Stroke);
-            paint.setColor(CK.parseColorString(user.color))
+            paint.setColor(CK.parseColorString(user.color));
             paint.setStrokeWidth(5);
-            const rect2 = CK.RRectXY(CK.LTRBRect(node.x, node.y, node.x + node.width, node.y + node.height), node.radius + 5, node.radius + 5);
-            canvas.drawRRect(rect2, paint);
+
+            if(node.style === 2){
+                // ellipse
+                canvas.drawOval(CK.LTRBRect(node.x - 5, node.y - 5, node.x + node.width + 5, node.y + node.height + 5), paint);
+            } else if(node.style === 3){
+                // diamond bigger
+                const bigPath = new CK.Path();
+                const bx = node.x + node.width / 2;
+                const by = node.y + node.height / 2;
+                bigPath.moveTo(bx, node.y - 5);
+                bigPath.lineTo(node.x + node.width + 5, by);
+                bigPath.lineTo(bx, node.y + node.height + 5);
+                bigPath.lineTo(node.x - 5, by);
+                bigPath.close();
+                canvas.drawPath(bigPath, paint);
+                bigPath.delete();
+            } else {
+                const rect2 = CK.RRectXY(CK.LTRBRect(node.x - 5, node.y - 5, node.x + node.width + 5, node.y + node.height + 5), node.radius + 5, node.radius + 5);
+                canvas.drawRRect(rect2, paint);
+            }
 
             const textStyle = new CK.TextStyle({
                 color: CK.Color(200,200,200),
@@ -60,22 +113,126 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
             builder.delete();
         } else if(selectedNodesIds().includes(node.id)){
 
-            const color = obtenerColorTexto(node.color);
+            const colorText = obtenerColorTexto(node.color);
 
             paint.setAlphaf(1);
             paint.setStyle(CK.PaintStyle.Stroke);
-            paint.setColor(CK.parseColorString(color));
+            paint.setColor(CK.parseColorString(colorText));
             paint.setStrokeWidth(4);
 
-            const rect = CK.RRectXY(CK.LTRBRect(node.x - 2, node.y - 2, node.x + node.width + 2, node.y + node.height + 2), node.radius + 4, node.radius + 4);
-
-            canvas.drawRRect(rect, paint);
+            if(node.style === 2){
+                canvas.drawOval(CK.LTRBRect(node.x - 2, node.y - 2, node.x + node.width + 2, node.y + node.height + 2), paint);
+            } else if(node.style === 3){
+                const selPath = new CK.Path();
+                const sx = node.x + node.width / 2;
+                const sy = node.y + node.height / 2;
+                selPath.moveTo(sx, node.y - 2);
+                selPath.lineTo(node.x + node.width + 2, sy);
+                selPath.lineTo(sx, node.y + node.height + 2);
+                selPath.lineTo(node.x - 2, sy);
+                selPath.close();
+                canvas.drawPath(selPath, paint);
+                selPath.delete();
+            } else {
+                const rectSel = CK.RRectXY(CK.LTRBRect(node.x - 2, node.y - 2, node.x + node.width + 2, node.y + node.height + 2), node.radius + 4, node.radius + 4);
+                canvas.drawRRect(rectSel, paint);
+            }
         }
     }
-    
 
+    /**
+     * Texto superior (opcional)
+     */
+
+    if(node.properties.textAbove){
+
+        const fontSize = node.properties.textAboveFontSize || 12;
+
+        const textAboveStyle = new CK.TextStyle({
+            color: CK.parseColorString(node.properties.textAboveColor || node.color),
+            fontSize: fontSize,
+            fontFamilies: ['Inter 28pt Mudium']
+        });
+
+        const textAboveParagraphStyle = new CK.ParagraphStyle({
+            textStyle: textAboveStyle,
+            textAlign: CK.TextAlign.Center,
+        });
+
+        const textAboveBuilder = CK.ParagraphBuilder.Make(textAboveParagraphStyle, nodusCanvas.getFont()!);
+
+        textAboveBuilder.addText(node.properties.textAbove);
+
+        const textAboveParagraph = textAboveBuilder.build();
+
+        textAboveParagraph.layout(node.width);
+
+        canvas.drawParagraph(textAboveParagraph, node.x, node.y - textAboveParagraph.getHeight() - (node.properties.textOffset || 5));
+    }
+
+    if(node.properties.textBelow){
+
+        const fontSize = node.properties.textBelowFontSize || 12;
+
+        const textBelowStyle = new CK.TextStyle({
+            color: CK.parseColorString(node.properties.textBelowColor || node.color),
+            fontSize: fontSize,
+            fontFamilies: ['Inter 28pt Mudium']
+        });
+
+        const textBelowParagraphStyle = new CK.ParagraphStyle({
+            textStyle: textBelowStyle,
+            textAlign: CK.TextAlign.Center,
+        });
+
+        const textBelowBuilder = CK.ParagraphBuilder.Make(textBelowParagraphStyle, nodusCanvas.getFont()!);
+
+        textBelowBuilder.addText(node.properties.textBelow);
+
+        const textBelowParagraph = textBelowBuilder.build();
+
+        textBelowParagraph.layout(node.width);
+
+        canvas.drawParagraph(textBelowParagraph, node.x, node.y + node.height + (node.properties.textOffset || 5));
+    }
+
+    if(shapePath) shapePath.delete();
     paint.delete();
 };
+
+export const drawNodeGrid = (CK: CanvasKit, canvas: Canvas, node: Node) => {
+
+    /**
+     * Dibujar asintotas verticales y horintales en cada lado
+     * todas las lineas debe cubrir toda la pantalla para que el usuario pueda aproximar la cercania a otros elementos
+     */
+
+    
+    const paint = new CK.Paint();
+    paint.setColor(CK.Color(155,155,255,0.5));
+    paint.setStyle(CK.PaintStyle.Stroke);
+    paint.setStrokeWidth(1);
+
+    const startX = -nodusCanvas.camera.offsetX() / nodusCanvas.camera.zoom();
+    const startY = -nodusCanvas.camera.offsetY() / nodusCanvas.camera.zoom();
+
+    const endX = startX + nodusCanvas.camera.getWordlSize().width;
+    const endY = startY + nodusCanvas.camera.getWordlSize().height;
+    
+    // Linea Drecha (x + width)
+    canvas.drawLine(node.x + node.width, startY, node.x + node.width, endY, paint);
+
+    // Linea Izquierda (x)
+    canvas.drawLine(node.x, startY, node.x, endY, paint);
+
+    // Linea Superior (y)
+    canvas.drawLine(startX, node.y, endX, node.y, paint);
+
+    // Linea Inferior (y + height)
+    canvas.drawLine(startX, node.y + node.height, endX, node.y + node.height, paint);
+
+    paint.delete();
+}
 
 const MARGIN_BOX = -20;
 
@@ -145,7 +302,7 @@ export const drawResizingBox = (CK: CanvasKit, canvas: Canvas, nodes: Node[]) =>
     paint.delete();
 }
 
-export const drawConnection  = (CK: CanvasKit, canvas : Canvas, fromNode: Node, toNode: Node, id: string, isExport = false) => {
+export const drawConnection  = (CK: CanvasKit, canvas : Canvas, fromNode: Node, toNode: Node, conn: Connection, isExport = false) => {
 
     const linePaint = new CK.Paint();
     linePaint.setStyle(CK.PaintStyle.Stroke);
@@ -156,7 +313,7 @@ export const drawConnection  = (CK: CanvasKit, canvas : Canvas, fromNode: Node, 
     const fromColor = CK.Color(HexToColor(fromNode.color)[0], HexToColor(fromNode.color)[1], HexToColor(fromNode.color)[2]);
     const toColor = CK.Color(HexToColor(toNode.color)[0], HexToColor(toNode.color)[1], HexToColor(toNode.color)[2]);
 
-    const path = NodeToNode(CK, fromNode, toNode);
+    const path = NodeToNode(CK, fromNode, toNode, conn.tipo);
 
     const shader = CK.Shader.MakeLinearGradient(
         [fromNode.x + fromNode.width / 2, fromNode.y + fromNode.height / 2],
@@ -168,7 +325,7 @@ export const drawConnection  = (CK: CanvasKit, canvas : Canvas, fromNode: Node, 
 
     linePaint.setDither(true);
 
-    if(selectedConnectionId() !== id || isExport){
+    if(selectedConnectionId() !== conn.id || isExport){
         path.dash(10, 5, - flowConecctions * 15);
 
         linePaint.setShader(shader);
@@ -190,6 +347,51 @@ export const drawConnection  = (CK: CanvasKit, canvas : Canvas, fromNode: Node, 
         linePaint.setShader(shader);
         linePaint.setMaskFilter(null);
         canvas.drawPath(path, linePaint);
+    }
+
+    if(conn.properties.text){
+
+        const textStyle = new CK.TextStyle({
+            color: CK.parseColorString(conn.properties.textColor || "#ffffff"),
+            fontSize: conn.properties.textFontSize || 14,
+            fontFamilies: ['Inter 28pt Mudium']
+        });
+
+        const textParagraphStyle = new CK.ParagraphStyle({
+            textStyle: textStyle,
+            textAlign: CK.TextAlign.Center,
+        });
+
+        const textBuilder = CK.ParagraphBuilder.Make(textParagraphStyle, nodusCanvas.getFont()!);
+        textBuilder.addText(conn.properties.text);
+
+        const textParagraph = textBuilder.build();
+
+        const fromCenter = {
+            x: fromNode.x + fromNode.width / 2,
+            y: fromNode.y + fromNode.height / 2
+        };
+        const toCenter = {
+            x: toNode.x + toNode.width / 2,
+            y: toNode.y + toNode.height / 2
+        };
+        const midPoint = {
+            x: (fromCenter.x + toCenter.x) / 2,
+            y: (fromCenter.y + toCenter.y) / 2,
+        };
+
+        textParagraph.layout(200);
+
+        canvas.save();
+
+        canvas.translate(midPoint.x, midPoint.y);
+
+        canvas.drawParagraph(textParagraph, -textParagraph.getMaxWidth() / 2, -textParagraph.getHeight() / 2 - (conn.properties.textOffset || 5));
+
+        canvas.restore();
+
+        textParagraph.delete();
+        textBuilder.delete();
     }
 
     path.delete();
@@ -240,12 +442,18 @@ export const drawBackground = () => {
 export const drawNodeText = (CK: CanvasKit, canvas: Canvas, node: Node, fontMgr: FontMgr | null) => {
     if(!fontMgr) return;
 
-    const color = HexToColor(obtenerColorTexto(node.color))
+    const color = obtenerColorTexto(node.color);
+
+    const haveUnderline = node.properties.underline || false;
 
     const textStyle = new CK.TextStyle({
-        color: CK.Color(color[0], color[1], color[2]),
-        fontSize: 15,
-        fontFamilies: ['Inter 28pt Mudium']
+        color: CK.parseColorString(color),
+        fontSize: node.properties.fontSize || 15,
+        fontFamilies: ['Inter 28pt Mudium'],
+        decoration: haveUnderline ? CK.UnderlineDecoration : CK.NoDecoration,
+        decorationColor: CK.parseColorString(color),
+        decorationThickness: 1,
+        decorationStyle: CK.DecorationStyle.Solid
     });
 
     const paragraphStyle = new CK.ParagraphStyle({
@@ -259,7 +467,7 @@ export const drawNodeText = (CK: CanvasKit, canvas: Canvas, node: Node, fontMgr:
     const paragraph = builder.build();
     paragraph.layout(node.width - 20);
 
-    canvas.drawParagraph(paragraph, node.x + 7, node.y + (node.height / 2) - paragraph.getHeight() / 2);
+    canvas.drawParagraph(paragraph, node.x + 10, node.y + (node.height / 2) - paragraph.getHeight() / 2);
 
     paragraph.delete();
     builder.delete();
@@ -462,7 +670,7 @@ export const exportDiagramAsPng = async () => {
         const toNode = getNode(conn.to);
 
         if(fromNode && toNode){
-            drawConnection(CK, canvas, fromNode, toNode, conn.id, true);
+            drawConnection(CK, canvas, fromNode, toNode, conn, true);
         }
     });
 

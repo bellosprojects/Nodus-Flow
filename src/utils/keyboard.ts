@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { nodes, selectedNodesIds, setSelectedNodesIds, deleteNode } from "../models/nodes";
-import { mousePos, setIsCommandPaletteOpen, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
+import { nodes, selectedNodesIds, setSelectedNodesIds, deleteNode, selectedNodes } from "../models/nodes";
+import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
 import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette";
 import { activeUsers } from "../models/users";
 import { userData } from "../models/userStore";
@@ -75,7 +75,20 @@ function navigateCommandPaletteEvent(e: KeyboardEvent){
 
         if(activeIndex() >= filteredItems().length) return;
 
-        setSearchQuery(`> ${filteredItems()[activeIndex()].label}`);
+        let label = filteredItems()[activeIndex()].label;
+
+        if(selectedNodesIds().length === 1){
+            const selectedNode = nodes.find(n => n.id === selectedNodesIds()[0]);
+
+            if(label.includes("NodeName")){
+                label = label.replace("NodeName", selectedNode?.title || "NodeName");
+            }
+        } else if(selectedNodesIds().length > 1){
+            label = label.replace("fromNodeName", selectedNodes()[0].title || "fromNodeName");
+            label = label.replace("toNodeName", selectedNodes()[1].title || "toNodeName");
+        }
+
+        setSearchQuery(`> ${label}`);
 
     }
 }
@@ -112,6 +125,17 @@ function nodeSelectionsEvent(e: KeyboardEvent){
     }
 }
 
+function extraShortCuts(e: KeyboardEvent){
+    if(e.ctrlKey || e.metaKey){
+        e.preventDefault();
+        if(e.key === 'l'){
+            setIsLayersPanelOpen(prev => !prev);
+        } else if(e.key === 'p'){
+            setIsEditPanelOpen(prev => !prev);
+        }
+    }
+}
+
 function historyListeners(e : KeyboardEvent){
     if(e.ctrlKey || e.metaKey){
         if(e.key === 'z'){
@@ -133,6 +157,7 @@ export const initializeEditorKeyboardEvents = () => {
     window.addEventListener('keydown', navigateCommandPaletteEvent);
     window.addEventListener('keydown', mousesOptionEvents);
     window.addEventListener('keydown', nodeSelectionsEvent);
+    window.addEventListener('keydown', extraShortCuts);
 };
 
 export const removeEditorKeyboardEvents = () => {
@@ -143,6 +168,7 @@ export const removeEditorKeyboardEvents = () => {
     window.removeEventListener('keydown', navigateCommandPaletteEvent);
     window.removeEventListener('keydown', mousesOptionEvents);
     window.removeEventListener('keydown', nodeSelectionsEvent); 
+    window.removeEventListener('keydown', extraShortCuts); 
 };
 
 export const initializeGlobalKeyboardEvents = () => {

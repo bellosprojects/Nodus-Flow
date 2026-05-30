@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import { activeNode, finalizeNodePosition, finalizeNodeSize, showPropertiesPanel, updateNodeColor, updateNodeOpacity, updateNodePosition, updateNodeRadius, updateNodeSize, updateNodoTitle } from "../../../models/nodes";
+import { activeNode, finalizeNodePosition, finalizeNodeSize, showPropertiesPanel, updateNodeColor, updateNodeOpacity, updateNodePosition, updateNodeRadius, updateNodeSize, updateNodoTitle, changeNodeStyle } from "../../../models/nodes";
 import { isEditPanelOpen } from "../Editor";
 
 import styles from "../Editor.module.css";
@@ -122,6 +122,20 @@ export const Properties = () => {
                                 value={node!.radius}
                                 onInput={(e) => updateNodeRadius(node!.id, parseFloat(e.currentTarget.value))}
                             />
+                        </div>
+                    </section>
+
+                    <section class="prop-section">
+                        <label>Style</label>
+                        <div class="input-group">
+                            <select value={node!.style} 
+                            onInput={(e) => changeNodeStyle(node!.id, parseInt(e.currentTarget.value))} 
+                            style={{width: "100%", background: "#1e1e1e", color: "white", border: "1px solid rgba(255,255,255,0.08)", "border-radius": "8px", padding: "6px"}}>
+                                <option value={1}>Rectangle</option>
+                                <option value={2}>Ellipse</option>
+                                <option value={3}>Diamond</option>
+                                <option value={4}>Outline</option>
+                            </select>
                         </div>
                     </section>
                 </div>

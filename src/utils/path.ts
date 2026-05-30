@@ -55,12 +55,17 @@ function getOutDirection(side: CONTROL_POINT) {
     }
 }
 
-export function NodeToNode(CK : CanvasKit, node1 : Node, node2: Node){
+const CURVE_PATH = 1;
+const BASIC_PATH = 2;
+
+export function NodeToNode(CK : CanvasKit, node1 : Node, node2: Node, tipo : number){
 
     const path = new CK.Path();
     
     const c1 = centerOf(node1);
     const c2 = centerOf(node2);
+
+    if(tipo === BASIC_PATH) return path.moveTo(c1.x, c1.y).lineTo(c2.x, c2.y);
 
     const side1 = getBestSide(node1, c2);
     const side2 = getBestSide(node2, c1);
@@ -68,17 +73,24 @@ export function NodeToNode(CK : CanvasKit, node1 : Node, node2: Node){
     const start = getPoint(side1, node1);
     const end   = getPoint(side2, node2);
 
-    const outDir = getOutDirection(side1);           // salida
-    const inDir  = getOutDirection(side2);           // normal exterior destino
-
-    const dist = Math.hypot(end.x - start.x, end.y - start.y);
-    const k = Math.min(50, dist * 0.4);              // longitud de la tangente
-
-    const cp1 = { x: start.x + outDir.x * k, y: start.y + outDir.y * k };
-    const cp2 = { x: end.x   + inDir.x * k, y: end.y   + inDir.y * k };
-
     path.moveTo(start.x, start.y);
-    path.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y);
+
+    if(tipo === CURVE_PATH){
+
+        const outDir = getOutDirection(side1);           // salida
+        const inDir  = getOutDirection(side2);           // normal exterior destino
+
+        const dist = Math.hypot(end.x - start.x, end.y - start.y);
+        const k = Math.min(50, dist * 0.4);              // longitud de la tangente
+
+        const cp1 = { x: start.x + outDir.x * k, y: start.y + outDir.y * k };
+        const cp2 = { x: end.x   + inDir.x * k, y: end.y   + inDir.y * k };
+
+        path.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y);
+
+    } else {
+        path.lineTo(end.x, end.y);
+    }
 
     return path;
 }

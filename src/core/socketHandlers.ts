@@ -1,5 +1,5 @@
-import { createRemoteConnection, deleteConnection } from "../models/connections";
-import { addRemoteNode, deleteNode, lockNode, moveToBack, moveToFront, unLockNode, updateNodeColor, updateNodeOpacity, updateNodeRadius, updateNodeRemote, updateNodeSize, updateNodoTitle } from "../models/nodes";
+import { addConnectionProperty, changeConnectionStyle, createRemoteConnection, deleteConnection, deleteConnectionProperty } from "../models/connections";
+import { addNodeProperty, addRemoteNode, changeNodeStyle, deleteNode, deleteNodeProperty, lockNode, moveToBack, moveToFront, unLockNode, updateNodeColor, updateNodeOpacity, updateNodeRadius, updateNodeRemote, updateNodeSize, updateNodoTitle } from "../models/nodes";
 import { addPing } from "../models/ping";
 import { setActiveUsers, updateCursor, User } from "../models/users";
 import { updateCurrentProjectName } from "../models/userStore";
@@ -10,14 +10,14 @@ type SokectHandler = (data: any) => void;
 export const eventHandlers: Record<string, SokectHandler> = {
     'nuevo_nodo': (data) => {
         const nodo = data.nodo;
-        addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius, nodo.pin);
+        addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius, nodo.pin, nodo.style, nodo.properties);
     },
     'estado_inicial': (data) => {
         for(let nodo of data.nodos){
-            addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius, nodo.pin);
+            addRemoteNode(nodo.id, nodo.x, nodo.y, nodo.w, nodo.h, nodo.texto, nodo.color, nodo.opacidad, nodo.radius, nodo.pin, nodo.style, nodo.properties);
         }
         for(let conn of data.conexiones){
-            createRemoteConnection(conn.id, conn.origenId, conn.destinoId, conn.style);
+            createRemoteConnection(conn.id, conn.origenId, conn.destinoId, conn.style || 1, conn.properties || {});
         }
         updateCurrentProjectName(data.nombre, false);
         nodusCanvas.camera.centerCameraNow();
@@ -52,7 +52,7 @@ export const eventHandlers: Record<string, SokectHandler> = {
     },
     'crear_conexion': (data) => {
         const conn = data.conexion;
-        createRemoteConnection(conn.id, conn.origenId, conn.destinoId, conn.style);
+        createRemoteConnection(conn.id, conn.origenId, conn.destinoId, conn.style || 1, conn.properties || {});
     },
     'cambiar_opacidad_nodo': (data) => {
         updateNodeOpacity(data.id, data.opacidad, false);
@@ -86,5 +86,23 @@ export const eventHandlers: Record<string, SokectHandler> = {
     },
     'ping_atencion': (data) => {
         addPing(data.x, data.y, data.color, data.nombre, false);
+    },
+    'cambiar_estilo_conexion': (data) => {
+        changeConnectionStyle(data.id, data.estilo);
+    },
+    'cambiar_estilo_nodo': (data) => {
+        changeNodeStyle(data.id, data.estilo);
+    },
+    'cambiar_nodo_property': (data) => {
+        addNodeProperty(data.id, data.propertyName, data.propertyValue, false);
+    },
+    'deletear_nodo_property': (data) => {
+        deleteNodeProperty(data.id, data.propertyName, false);
+    },
+    'cambiar_conexion_property': (data) => {
+        addConnectionProperty(data.id, data.propertyName, data.propertyValue, false);
+    },
+    'deletear_conexion_property': (data) => {
+        deleteConnectionProperty(data.id, data.propertyName, false);
     }
 };

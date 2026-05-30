@@ -3,14 +3,13 @@ import { mouseDisabled, setIsCommandPaletteOpen  } from "../Editor";
 
 import searchIco from "../../../assets/search.svg";
 import { Accessor, createEffect, createMemo, createSignal, For } from "solid-js";
-import { deleteAllDisconnected, deleteNode, jumpToNode, lockNode, nodes, selectedNodesIds, setSelectedNodesIds, unLockNode } from "../../../models/nodes";
+import { bulkDelete, jumpToNode, lockNode, nodes, selectedNodesIds, setSelectedNodesIds, unLockNode } from "../../../models/nodes";
 import { exportDiagramAsPng } from "../../../core/renderer";
 import { connections, deleteConnection } from "../../../models/connections";
 import { exportAsJson } from "../../../models/userStore";
 import { nodusCanvas } from "../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../utils/path";
-import { performRedo, performUndo, redoStack, undoStack } from "../../../core/history";
-import { createNodesFromCommand } from "../../../utils/commands";
+import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery } from "../../../utils/commands";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);
 export const [searchQuery, setSearchQuery] = createSignal("");
@@ -20,13 +19,18 @@ export type OmniItem = {
     label: string,
     type: 'NODE' | 'COMMAND',
     action: (arg?: string) => void,
-    color?: string
+    color?: string,
+    argPlaceholder?: string
 }
 
 enum CommandID {
     ExportPng = "EXPORT_PNG",
     ExportJson = "EXPORT_JSON",
+    DelSelectedNodes = "DEL_SELECTED_NODES",
+    DelAllConnections = "DEL_ALL_CONNECTIONS",
+    DelAllNodes = "DEL_ALL_NODES",
     DelAllDisconnected = "DEL_ALL_DISCONNECTED",
+    DelNode = "DEL_NODENAME",
     ResetView = "RESET_VIEW",
     ClearCanvas = "CLEAR_CANVAS",
     LockAll = "LOCK_ALL",
@@ -34,12 +38,16 @@ enum CommandID {
     Deseclect = "SELECT_NONE",
     SelectAll = "SELECT_ALL",
     InverstSelect = "SELECT_INVERT",
-    Undo = "UNDO",
-    Redo = "REDO",
-    CreateNode = "CREATE_NODE"
+    CreateNode = "CREATE_NODE",
+    ConnectComplete = "CONNECT_COMPLETE",
+    ConnectCircuit = "CONNECT_CIRCUIT",
+    AddNodeProperty = "ADD_NODE_PROPERTY",
+    DelNodeProperty = "DEL_NODE_PROPERTY",
+    AddConnectionProperty = "ADD_CONNECTION_PROPERTY",
+    DelConnectionProperty = "DEL_CONNECTION_PROPERTY"
 }
 
-const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) => void, color?: string}> = {
+const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) => void, color?: string, argPlaceholder?: string}> = {
     [CommandID.ExportPng]: {
         label: 'Export: PNG',
         action: (_?: string) => exportDiagramAsPng(),
@@ -50,12 +58,43 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         action: (_?: string) => exportAsJson(),
         color: "#97572c"
     },
-    [CommandID.DelAllDisconnected]: {
-        label: 'Delete Disconnected',
-        action: (_?: string) => {
-            deleteAllDisconnected();
+    [CommandID.DelSelectedNodes]: {
+        label: 'Delete: ',
+        action: (arg?: string) => {
+            deleteFromQuery(arg);
         },
-        color: "#aa2f10"
+        color: "#aa2f10",
+        argPlaceholder: "Selected Nodes"
+    },[CommandID.DelAllNodes]: {
+        label: 'Delete: ',
+        action: (arg?: string) => {
+            deleteFromQuery(arg);
+        },
+        color: "#aa2f10",
+        argPlaceholder: "All Nodes"
+    },
+    [CommandID.DelAllConnections]: {
+        label: 'Delete: ',
+        action: (arg?: string) => {
+            deleteFromQuery(arg);
+        },
+        color: "#aa2f10",
+        argPlaceholder: "All Connections"
+    },
+    [CommandID.DelAllDisconnected]: {
+        label: 'Delete: ',
+        action: (arg?: string) => {
+            deleteFromQuery(arg);
+        },
+        color: "#aa2f10",
+        argPlaceholder: "All Disconnected"
+    },[CommandID.DelNode]: {
+        label: 'Delete: ',
+        action: (arg?: string) => {
+            deleteFromQuery(arg);
+        },
+        color: "#aa2f10",
+        argPlaceholder: "NodeName"
     },
     [CommandID.ResetView]: {
         label: 'Center Camera',
@@ -72,7 +111,7 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
     [CommandID.ClearCanvas]: {
         label: 'Clear Canvas',
         action: (_?: string) => {
-            [...nodes].forEach(node => deleteNode(node.id));
+            bulkDelete();
             [...connections].forEach(conn => deleteConnection(conn.id));
         },
         color: "#9be28c"
@@ -110,30 +149,61 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         },
         color: "#c796c9"
     },
-    [CommandID.Undo]: {
-        label: `Undo: ${undoStack()[0]?.label || ""}`,
-        action: (_?: string) => {
-            performUndo();
-        }
-    },
-    [CommandID.Redo]: {
-        label: `Redo: ${redoStack()[0]?.label || ""}`,
-        action: (_?: string) => {
-            performRedo();
-        }
-    },
     [CommandID.CreateNode]: {
         label: "Create Node: ",
         action: (arg?: string) => {
             createNodesFromCommand(arg);
         },
-        color: "#456733"
+        color: "#456733",
+        argPlaceholder: "[NewNodeName]"
+    },
+    [CommandID.ConnectComplete]: {
+        label: "Connect: ",
+        action: (arg?:string) => {
+            connectGraph(arg);
+        },
+        argPlaceholder: "Complete"
+    },
+    [CommandID.ConnectCircuit]: {
+        label: "Connect: ",
+        action: (arg?:string) => {
+            connectGraph(arg);
+        },
+        argPlaceholder: "Circuit"
+    },
+    [CommandID.AddNodeProperty]: {
+        label: "Add Property: ",
+        action: (arg?: string) => {
+            addNodePropertyFromQuery(arg);
+        },
+        argPlaceholder: "NodeName propertyName propertyValue?"
+    },
+    [CommandID.DelNodeProperty]: {
+        label: "Delete Node Property: ",
+        action: (arg?: string) => {
+            deleteNodePropertyFromQuery(arg);
+        },
+        argPlaceholder: "NodeName propertyName"
+    },
+    [CommandID.AddConnectionProperty]: {
+        label: "Add Connection Property: ",
+        action: (arg?: string) => {
+            addConnectionPropertyFromQuery(arg);
+        },
+        argPlaceholder: "fromNodeName toNodeName propertyName propertyValue?"
+    },
+    [CommandID.DelConnectionProperty]: {
+        label: "Delete Connection Property: ",
+        action: (arg?: string) => {
+            deleteConnectionPropertyFromQuery(arg);
+        },
+        argPlaceholder: "fromNodeName toNodeName propertyName"
     }
 
 }
 
 export const filteredItems = createMemo(() => {
-    let q = searchQuery().toLowerCase().trim();
+    let q = searchQuery().trim();
     if(q.length === 0) return [];
 
     if(q[0] === '>'){
@@ -146,13 +216,20 @@ export const filteredItems = createMemo(() => {
         const cmdItems: OmniItem[] = Object.entries(COMMANDS_BASE).map(([id, cmd]) => {
             // base label is the part before any ':' in the command definition
             const baseLabel = (cmd.label || '').split(':')[0].trim();
-            const displayLabel = arg ? `${baseLabel}: ${arg}` : cmd.label;
+            const displayLabel = arg ? `${baseLabel}: ${arg}` : `${cmd.label}${cmd.argPlaceholder || ''}`;
 
             return ({
                 id,
                 label: displayLabel,
                 type: 'COMMAND',
-                action: () => cmd.action(arg),
+                action: () => {
+
+                    const procesedArg = arg || cmd.argPlaceholder;
+
+                    console.log(`Executing Command: ${baseLabel}(${procesedArg})`)
+
+                    cmd.action(procesedArg);
+                },
                 color: cmd.color
             });
         });
@@ -165,7 +242,7 @@ export const filteredItems = createMemo(() => {
         });
 
         // match against the base command name or full label
-        return whitoutRepeatsCmdItems.filter(item => item.label.toLowerCase().includes(cmdQuery) || item.label.toLowerCase().includes(full.toLowerCase()));
+        return whitoutRepeatsCmdItems.filter(item => item.label.toLowerCase().includes(cmdQuery.toLowerCase()) || item.label.toLowerCase().includes(full.toLowerCase()));
     }
 
     const nodeItems: OmniItem[] = nodes.map(node => ({
@@ -179,11 +256,16 @@ export const filteredItems = createMemo(() => {
     return nodeItems.filter(item => item.label.toLowerCase().includes(q));
 });
 
-export const onSelectedItem = (item: OmniItem) => {
-    item.action();
-    setSearchQuery("");
-    setIsCommandPaletteOpen(false);
-    setActiveIndex(0);
+export const onSelectedItem = (item?: OmniItem) => {
+
+    if(item !== undefined){
+
+        item.action();
+        setSearchQuery("");
+        setIsCommandPaletteOpen(false);
+        setActiveIndex(0);
+
+    }
 }
 
 export const COMMAND_PALETTE = () => {

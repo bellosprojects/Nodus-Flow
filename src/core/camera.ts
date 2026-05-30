@@ -106,6 +106,12 @@ export const createCameraStore = () => {
         centerOnPoint(center.x, center.y);
     }
 
+    const getWordlSize = () => {
+        const width = window.innerWidth / zoom();
+        const height = window.innerHeight / zoom();
+        return {width, height};
+    }
+
     return {
         offsetX, offsetY, zoom,
         setOffsetX, setOffsetY, setZoom,
@@ -120,6 +126,7 @@ export const createCameraStore = () => {
         getDiagramCenter,
         animateTo,
         offsetToCenterPoint,
-        centerCameraNow
+        centerCameraNow,
+        getWordlSize
     };
 }

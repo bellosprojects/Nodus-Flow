@@ -7,7 +7,7 @@ import { addConnection, connections, setConnections, setSelectedConnectionId } f
 import { moveNodeThrottle, socket, initSocket, closeSocket, sendEvent } from "../../core/socket";
 import {  createEffect, createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
-import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, ANCHOR_POINT, resizingDots, setFocusedPoint, setResizingDots } from "../../core/renderer";
+import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, ANCHOR_POINT, resizingDots, setFocusedPoint, setResizingDots, drawNodeGrid } from "../../core/renderer";
 import "../../App.css";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -22,10 +22,10 @@ import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../.
 import { manageResizing } from "../../utils/resizing";
 import { calculateDiagramBounds } from "../../utils/path";
 
-export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false); 
+export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
-
 export const [isCommandPaletteOpen, setIsCommandPaletteOpen] = createSignal(false);
+export const [isConfigPanelOpen, setIsConfigPanelOpen] = createSignal(false);
 
 export const [isResizing, setIsResizing] = createSignal(false);
 export const [referencePoint, setReferencePoint] = createSignal<{x: number, y: number} | null>(null);
@@ -313,7 +313,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     const toNode = nodes.find(n => n.id === conn.to);
                     
                     if (fromNode && !fromNode.lock && toNode && !toNode.lock) {
-                        drawConnection(CK, canvas, fromNode, toNode, conn.id);
+                        drawConnection(CK, canvas, fromNode, toNode, conn);
                     }
 
                 });
@@ -345,6 +345,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                         drawNodeText(CK, canvas, node, nodusCanvas.getFont());
                     }
                 });
+
+                if(selectedNodesIds().length === 1){
+                    const node = selectedNodes()[0];
+                    drawNodeGrid(CK, canvas, node);
+                }
 
                 setResizingDots([]);
                 if(selectedNodesIds().length > 0){

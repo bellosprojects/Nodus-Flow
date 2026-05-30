@@ -9,6 +9,7 @@ import homeIco from "../../../assets/home.svg";
 import editIco from "../../../assets/edit.svg";
 import layersIco from "../../../assets/layers.svg";
 import terminalIco from "../../../assets/terminal.svg";
+import configIco from "../../../assets/settings.svg";
 
 import textIco from "../../../assets/text-adjust.svg";
 import copyIco from "../../../assets/copy.svg";
@@ -26,9 +27,9 @@ import styles from "../Editor.module.css";
 import { updateCurrentProjectName, userData } from '../../../models/userStore';
 import { For, Match, Show, Switch } from 'solid-js';
 
-import { isCommandPaletteOpen, isEditPanelOpen, isLayersPanelOpen, layerView, mouseOption, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setLayerView, setMouseOption } from '../Editor';
+import { isCommandPaletteOpen, isConfigPanelOpen, isEditPanelOpen, isLayersPanelOpen, layerView, mouseOption, setIsCommandPaletteOpen, setIsConfigPanelOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setLayerView, setMouseOption } from '../Editor';
 import { activeUsers } from '../../../models/users';
-import { Connection, connections, deleteConnection, selectedConnectionId, setSelectedConnectionId,  } from '../../../models/connections';
+import { changeConnectionStyle, Connection, connections, deleteConnection, selectedConnectionId, setSelectedConnectionId,  } from '../../../models/connections';
 import { exportDiagramAsPng } from '../../../core/renderer';
 import { nodusCanvas } from '../../../core/NodusCanvas';
 
@@ -72,6 +73,8 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
             <img src={connectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'connect' ? styles.selected : ""}`} onClick={(_) => setMouseOption('connect')}/>
 
             <div class="separator" />
+
+            <img src={configIco} alt="" classList={{[styles.barItem]: true, [styles.selected]: isConfigPanelOpen()}} onClick={(_) => setIsConfigPanelOpen(prev => !prev)} />
 
             <img src={fullScreenIco} alt="" class={styles.barItem} onClick={onFullScreen}/>
 
@@ -204,7 +207,7 @@ const NODE_FRAME = (node: Node) => {
 const CONN_FRAME = (conn: Connection) => {
     return (
         <div class={`${styles.layerItem} ${selectedConnectionId() === conn.id? styles.selected: ""} `}
-            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodesIds([])}}
+            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodesIds([]); changeConnectionStyle(conn.id, 1 + ((conn.tipo) % 3))}}
             >
                 <img src={deleteIco} onClick={(_) => deleteConnection(conn.id)}/>
                 <p>{`${getNode(conn.from)?.title || "Empty"} - ${getNode(conn.to)?.title || "Empty"}`}</p>
