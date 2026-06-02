@@ -168,6 +168,9 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
         textAboveParagraph.layout(node.width);
 
         canvas.drawParagraph(textAboveParagraph, node.x, node.y - textAboveParagraph.getHeight() - (node.properties.textOffset || 5));
+
+        textAboveParagraph.delete();
+        textAboveBuilder.delete();
     }
 
     if(node.properties.textBelow){
@@ -194,6 +197,9 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
         textBelowParagraph.layout(node.width);
 
         canvas.drawParagraph(textBelowParagraph, node.x, node.y + node.height + (node.properties.textOffset || 5));
+
+        textBelowParagraph.delete();
+        textBelowBuilder.delete();
     }
 
     if(shapePath) shapePath.delete();
@@ -275,6 +281,7 @@ export const drawResizingBox = (CK: CanvasKit, canvas: Canvas, nodes: Node[]) =>
 
     canvas.drawRect(rect, paint);
     
+    const newDots: {x:number, y:number, direction: ANCHOR_POINT}[] = [];
     anchorPoints.forEach(point => {
         paint.setColor(CK.Color(240,240,240));
         paint.setStyle(CK.PaintStyle.Fill);
@@ -292,12 +299,14 @@ export const drawResizingBox = (CK: CanvasKit, canvas: Canvas, nodes: Node[]) =>
         paint.setStrokeWidth(1);
         canvas.drawRect(anchorRect, paint);
 
-        setResizingDots(prev => [...prev, {
+        newDots.push({
             x: absolutePointPosition.x,
             y: absolutePointPosition.y,
             direction: point.direction
-        }])
+        });
     });
+
+    setResizingDots(newDots);
 
     paint.delete();
 }
@@ -638,6 +647,7 @@ export const drawPings = () => {
         paint.setStyle(CK.PaintStyle.Stroke);
 
     });
+    paint.delete();
 }
 
 export const exportDiagramAsPng = async () => {
@@ -722,4 +732,5 @@ export const drawSelectionRect = () => {
     paint.setStrokeWidth(1);
     paint.setColor(CK.Color(64,150,255,0.8));
     canvas.drawRRect(rect, paint);
+    paint.delete();
 }
