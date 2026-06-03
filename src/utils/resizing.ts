@@ -1,6 +1,6 @@
-import { ANCHOR_POINT, focusedPoint } from "../core/renderer";
+import { focusedPoint } from "../core/renderer";
 import { selectedNodes, updateNodeSize, updateNodoAbsolutePosition } from "../models/nodes";
-import { referencePoint, resizingBox, resizingNodesCopy } from "../views/Editor/Editor";
+import { referencePoint, resizingBox, resizingNodesCopy, ANCHOR_POINT } from "../views/Editor/Editor";
 
 /*
 

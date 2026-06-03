@@ -1,7 +1,7 @@
 import { createStore } from "solid-js/store";
 import { sendEvent } from "../core/socket";
 import { pushAction } from "../core/history";
-import { createSignal } from "solid-js";
+import { createMemo, createSignal } from "solid-js";
 
 export interface Connection {
     id: string,
@@ -15,7 +15,7 @@ export const [connections, setConnections] = createStore<Connection[]>([]);
 
 export const [selectedConnectionId, setSelectedConnectionId] = createSignal<string | null>(null);
 
-export const selectedConnection = () => connections.find(conn => conn.id === selectedConnectionId());
+export const selectedConnection = createMemo(() => connections.find(c => c.id === selectedConnectionId()));
 
 export const addConnection = (fromId: string, toId: string) => {
     if(fromId === toId) return;
@@ -60,6 +60,8 @@ export const addConnection = (fromId: string, toId: string) => {
             });
         }
     });
+
+    return newID;
 }
 
 export const createRemoteConnection = (id: string, origen: string, destino: string, style: number, properties: any) => {
@@ -191,10 +193,13 @@ export const deleteConnectionProperty = (connId: string, propertyName: string, s
     const conn = connections.find(c => c.id === connId);
     const prevValue = conn?.properties ? conn.properties[propertyName] : undefined;
 
-    setConnections(conn => conn.id === connId, "properties", (props) => {
-        const newProps = {...props};
-        delete newProps[propertyName];
-        return newProps;
+    setConnections(c => c.id === connId, (n) => {
+        const newProperties = {...n.properties};
+        delete newProperties[propertyName];
+        return {
+            ...n,
+            properties: newProperties
+        };
     });
 
     if(send){

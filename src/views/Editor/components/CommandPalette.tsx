@@ -9,7 +9,7 @@ import { connections, deleteConnection } from "../../../models/connections";
 import { exportAsJson } from "../../../models/userStore";
 import { nodusCanvas } from "../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../utils/path";
-import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery } from "../../../utils/commands";
+import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery } from "../../../utils/commands";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);
 export const [searchQuery, setSearchQuery] = createSignal("");
@@ -26,6 +26,7 @@ export type OmniItem = {
 enum CommandID {
     ExportPng = "EXPORT_PNG",
     ExportJson = "EXPORT_JSON",
+    ImportJson = "IMPORT_JSON",
     DelSelectedNodes = "DEL_SELECTED_NODES",
     DelAllConnections = "DEL_ALL_CONNECTIONS",
     DelAllNodes = "DEL_ALL_NODES",
@@ -57,6 +58,13 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         label: 'Export: JSON',
         action: (_?: string) => exportAsJson(),
         color: "#97572c"
+    },
+    [CommandID.ImportJson]: {
+        label: 'Import: JSON',
+        action: (_?: string) => {
+            importFromQuery();
+        },
+        color: "#2c977e"
     },
     [CommandID.DelSelectedNodes]: {
         label: 'Delete: ',
@@ -172,18 +180,18 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         argPlaceholder: "Circuit"
     },
     [CommandID.AddNodeProperty]: {
-        label: "Add Property: ",
+        label: "Add Node Property: ",
         action: (arg?: string) => {
             addNodePropertyFromQuery(arg);
         },
-        argPlaceholder: "NodeName propertyName propertyValue?"
+        argPlaceholder: "propertyName propertyValue?"
     },
     [CommandID.DelNodeProperty]: {
         label: "Delete Node Property: ",
         action: (arg?: string) => {
             deleteNodePropertyFromQuery(arg);
         },
-        argPlaceholder: "NodeName propertyName"
+        argPlaceholder: "propertyName"
     },
     [CommandID.AddConnectionProperty]: {
         label: "Add Connection Property: ",

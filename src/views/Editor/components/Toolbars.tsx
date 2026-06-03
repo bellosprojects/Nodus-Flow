@@ -18,6 +18,7 @@ import unLockIco from "../../../assets/unlock.svg";
 import frontIco from "../../../assets/front.svg";
 import backIco from "../../../assets/back.svg";
 import deleteIco from "../../../assets/delete.svg";
+import categoryIco from "../../../assets/category.svg";
 
 import shareIco from "../../../assets/share.svg";
 import downloadIco from "../../../assets/download.svg";
@@ -207,9 +208,10 @@ const NODE_FRAME = (node: Node) => {
 const CONN_FRAME = (conn: Connection) => {
     return (
         <div class={`${styles.layerItem} ${selectedConnectionId() === conn.id? styles.selected: ""} `}
-            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodesIds([]); changeConnectionStyle(conn.id, 1 + ((conn.tipo) % 3))}}
+            onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodesIds([]); }}
             >
                 <img src={deleteIco} onClick={(_) => deleteConnection(conn.id)}/>
+                <img src={categoryIco} onClick={(_) => {changeConnectionStyle(conn.id, 1 + ((conn.tipo) % 7))}}/>
                 <p>{`${getNode(conn.from)?.title || "Empty"} - ${getNode(conn.to)?.title || "Empty"}`}</p>
             </div>
     )

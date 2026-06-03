@@ -3,11 +3,11 @@ import { LEFT_TOOLBAR, USERS_PANEL, PROJECT_NAME, TOOL_BELT, LAYERS_PANEL, TOP_B
 import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupar, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
 import { lerp } from "../../utils/math";
 import { setDraggedNodeId, draggedNodeId, draggedNode  } from "../../models/nodes";
-import { addConnection, connections, setConnections, setSelectedConnectionId } from "../../models/connections";
+import { addConnection, connections, setConnections, setSelectedConnectionId, addConnectionProperty } from "../../models/connections";
 import { moveNodeThrottle, socket, initSocket, closeSocket, sendEvent } from "../../core/socket";
 import {  createEffect, createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
-import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, ANCHOR_POINT, resizingDots, setFocusedPoint, setResizingDots, drawNodeGrid } from "../../core/renderer";
+import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, resizingDots, setFocusedPoint, setResizingDots, drawNodeGrid, drawConnectionPoint, setSourceAnchorPoint } from "../../core/renderer";
 import "../../App.css";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -41,12 +41,36 @@ export let flowConecctions = 0;
 export let selectionRect = { x0: 0, y0: 0, x1: 0, y1: 0};
 export let mousePos = { x: 0, y: 0};
 
+export enum ANCHOR_POINT{
+    TOP = "TOP",
+    BOTTOM = "BOTTOM",
+    LEFT = "LEFT",
+    RIGHT = "RIGHT",
+    TOP_LEFT = "TOP_LEFT",
+    TOP_RIGHT = "TOP_RIGHT",
+    BOTTOM_LEFT = "BOTTOM_LEFT",
+    BOTTOM_RIGHT = "BOTTOM_RIGHT"
+};
+
+const anchorPoints = [
+    {x: 0, y: 0, direction: ANCHOR_POINT.TOP_LEFT},
+    {x: 0.5, y: 0, direction: ANCHOR_POINT.TOP},
+    {x: 1, y: 0, direction: ANCHOR_POINT.TOP_RIGHT},
+    {x: 1, y: 0.5, direction: ANCHOR_POINT.RIGHT},
+    {x: 1, y: 1, direction: ANCHOR_POINT.BOTTOM_RIGHT},
+    {x: 0.5, y: 1, direction: ANCHOR_POINT.BOTTOM},
+    {x: 0, y: 1, direction: ANCHOR_POINT.BOTTOM_LEFT},
+    {x: 0, y: 0.5, direction: ANCHOR_POINT.LEFT}
+];
+
 export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => {
 
     let isConnecting = false;
     let isSelecting = false;
     
     let connectionSourceId: string | null = null;
+    let connectionPoint: {x: number, y: number, direction: ANCHOR_POINT} | null = null;
+    let connectionSourcePoint: {x: number, y: number, direction: ANCHOR_POINT} | null = null;
 
     const handleMouseDown = (e: MouseEvent) => {
         if (document.activeElement instanceof HTMLElement) {
@@ -86,6 +110,41 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             if(hit && !hit.lock){
                 isConnecting = true;
                 connectionSourceId = hit.id;
+
+                // compute nearest anchor on the source node
+                const points = [
+                    {x: hit.x + 0 * hit.width, y: hit.y + 0 * hit.height, direction: ANCHOR_POINT.TOP_LEFT},
+                    {x: hit.x + 0.5 * hit.width, y: hit.y + 0 * hit.height, direction: ANCHOR_POINT.TOP},
+                    {x: hit.x + 1 * hit.width, y: hit.y + 0 * hit.height, direction: ANCHOR_POINT.TOP_RIGHT},
+                    {x: hit.x + 1 * hit.width, y: hit.y + 0.5 * hit.height, direction: ANCHOR_POINT.RIGHT},
+                    {x: hit.x + 1 * hit.width, y: hit.y + 1 * hit.height, direction: ANCHOR_POINT.BOTTOM_RIGHT},
+                    {x: hit.x + 0.5 * hit.width, y: hit.y + 1 * hit.height, direction: ANCHOR_POINT.BOTTOM},
+                    {x: hit.x + 0 * hit.width, y: hit.y + 1 * hit.height, direction: ANCHOR_POINT.BOTTOM_LEFT},
+                    {x: hit.x + 0 * hit.width, y: hit.y + 0.5 * hit.height, direction: ANCHOR_POINT.LEFT}
+                ];
+
+                const center = {x: hit.x + hit.width / 2, y: hit.y + hit.height / 2};
+                const click = {x, y};
+
+                let nearest = points[0];
+                let minDist = Infinity;
+                for(const p of points){
+                    const dx = p.x - click.x;
+                    const dy = p.y - click.y;
+                    const d = Math.sqrt(dx*dx + dy*dy);
+                    if(d < minDist){ minDist = d; nearest = p; }
+                }
+
+                const centerDist = Math.sqrt((center.x - click.x) * (center.x - click.x) + (center.y - click.y) * (center.y - click.y));
+
+                // if clicked near center or the nearest is a corner, don't use a source anchor
+                if(centerDist < 20 || [ANCHOR_POINT.TOP_LEFT, ANCHOR_POINT.TOP_RIGHT, ANCHOR_POINT.BOTTOM_LEFT, ANCHOR_POINT.BOTTOM_RIGHT].includes(nearest.direction)){
+                    connectionSourcePoint = null;
+                    setSourceAnchorPoint(null);
+                } else {
+                    connectionSourcePoint = { x: nearest.x, y: nearest.y, direction: nearest.direction };
+                    setSourceAnchorPoint(connectionSourcePoint as any);
+                }
             }
             return;
         }
@@ -143,6 +202,32 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         if(focusedPoint()){
             setMouseOption(prev => prev);
         }
+
+        if(mouseOption() === 'connect'){
+            // Buscar un punto cardinal de un nodo debajo del cursor para hacer snap
+            const snapNode = [...nodes].reverse().find(node =>
+                mousePos.x >= node.x - 10 && mousePos.x <= node.x + node.width + 10 &&
+                mousePos.y >= node.y - 10 && mousePos.y <= node.y + node.height + 10
+            );
+
+            if(snapNode){
+                const points = anchorPoints.map(point => {
+                    return {
+                        x: snapNode.x + point.x * snapNode.width,
+                        y: snapNode.y + point.y * snapNode.height,
+                        direction: point.direction
+                    }
+                });
+
+                const snapPoint = points.find(p => 
+                    mousePos.x <= p.x + 10 && mousePos.x >= p.x - 10 &&
+                    mousePos.y <= p.y + 10 && mousePos.y >= p.y - 10
+                );
+
+                connectionPoint = snapPoint? {x: snapPoint.x, y: snapPoint.y, direction: snapPoint.direction} : null;
+                
+            }
+        };
         
         if(isSelecting) {
             selectionRect.x1 = mousePos.x;
@@ -223,12 +308,22 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             );
 
             if(target && target.id !== connectionSourceId){
-                addConnection(connectionSourceId, target.id);
+                const newId = addConnection(connectionSourceId, target.id);
+                if(newId){
+                    if(connectionSourcePoint){
+                        addConnectionProperty(newId, 'fromPoint', connectionSourcePoint.direction);
+                    }
+                    if(connectionPoint){
+                        addConnectionProperty(newId, 'toPoint', connectionPoint.direction);
+                    }
+                }
             }
         }
 
         isConnecting = false;
         connectionSourceId = null;
+        connectionSourcePoint = null;
+        setSourceAnchorPoint(null);
 
         if(draggedNodeId()) {
             selectedNodesIds().forEach(nodeID => {
@@ -321,7 +416,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 if(isConnecting && connectionSourceId){
                     const fromNode = nodes.find(n => n.id === connectionSourceId);
                     if(fromNode){
-                        drawElasticLine(CK, canvas, fromNode, mousePos);
+                        const startPoint = connectionSourcePoint ? { x: connectionSourcePoint.x, y: connectionSourcePoint.y } : undefined;
+                        drawElasticLine(CK, canvas, fromNode, mousePos, startPoint);
                     }
                 }
 
@@ -349,6 +445,17 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 if(selectedNodesIds().length === 1){
                     const node = selectedNodes()[0];
                     drawNodeGrid(CK, canvas, node);
+                }
+
+                if(connectionPoint){
+                    drawConnectionPoint(CK, canvas, {
+                        x: connectionPoint.x,
+                        y: connectionPoint.y
+                    });
+                }
+
+                if(connectionSourcePoint){
+                    drawConnectionPoint(CK, canvas, { x: connectionSourcePoint.x, y: connectionSourcePoint.y }, "#33a1ff");
                 }
 
                 setResizingDots([]);

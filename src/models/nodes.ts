@@ -2,7 +2,7 @@ import { createStore } from "solid-js/store";
 import { snapToGrid } from "../utils/math";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { sendEvent } from "../core/socket";
-import { connections, connectionsByNode, setConnections, setSelectedConnectionId } from "./connections";
+import { connections, connectionsByNode, selectedConnectionId, setConnections, setSelectedConnectionId } from "./connections";
 import { nodusCanvas } from "../core/NodusCanvas";
 import {  setIsCommandPaletteOpen } from "../views/Editor/Editor";
 import { activeUsers } from "./users";
@@ -48,7 +48,7 @@ createEffect(() => {
     setSelectedNodesIds(validIds);
 });
 
-export const showPropertiesPanel = createMemo(() => selectedNodes().length === 1);
+export const showPropertiesPanel = createMemo(() => selectedNodes().length === 1 || selectedConnectionId() !== null);
 
 export const activeNode = createMemo(() => showPropertiesPanel()? selectedNodes()[0] : null);
 
