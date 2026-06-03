@@ -1,6 +1,6 @@
 import { nodusCanvas } from "../core/NodusCanvas";
-import { addConnection, addConnectionProperty, areConnected, connections, deleteConnection, deleteConnectionProperty } from "../models/connections";
-import { addNode, addNodeProperty, bulkDelete, deleteAllDisconnected, deleteNode, deleteNodeProperty, nodes, selectedNodesIds } from "../models/nodes";
+import { addConnection, addConnectionProperty, areConnected, connections, deleteConnection, deleteConnectionProperty, setConnections } from "../models/connections";
+import { addNode, addNodeProperty, bulkDelete, deleteAllDisconnected, deleteNode, deleteNodeProperty, nodes, selectedNodesIds, setNodes } from "../models/nodes";
 
 export const createNodesFromCommand = (query? : string) => {
 
@@ -75,48 +75,51 @@ export const addNodePropertyFromQuery = (query?: string) => {
 
     /**
      * Formato de la query
-     * Add Property: NodeName propertyName propertyValue?
+     * Add Property: propertyName propertyValue?
      * 
      * Ejemplo:
-     * Add Property: Node1 underline
-     * Add Property: Node1 color #ff0000
+     * Add Property: underline
+     * Add Property: color #ff0000
      */
 
+    const propertyName = query?.split(" ")[0];
+    const propertyValue = query?.split(" ").slice(1).join(" ") || true;
 
-    const node = [...nodes].find(node => node.title === query?.split(" ")[0]);
 
-    if(node){
-        const propertyName = query?.split(" ")[1];
-        const propertyValue = query?.split(" ").slice(2).join(" ") || true;
+    selectedNodesIds().forEach(nodeId => {
+        const node = [...nodes].find(node => node.id === nodeId);
 
-        if(propertyName)
+        if(node){
 
-        addNodeProperty(node.id, propertyName, propertyValue);
-    }
+            if(propertyName)
 
-    console.log(node);
+            addNodeProperty(node.id, propertyName, propertyValue);
+        }
+    });
+
 }
 
 export const deleteNodePropertyFromQuery = (query?: string) => {
 
     /**
      * Formato de la query
-     * Delete Property: NodeName propertyName
+     * Delete Property: propertyName
      * 
      * Ejemplo:
-     * Delete Property: Node1 underline
-     * Delete Property: Node1 color
+     * Delete Property: underline
+     * Delete Property: color
      */
+    const propertyName = query?.split(" ")[0];
 
-    const node = [...nodes].find(node => node.title === query?.split(" ")[0]);
+    if(propertyName)
+    selectedNodesIds().forEach(nodeId => {
+        const node = [...nodes].find(node => node.id === nodeId);
 
-    if(node){
-            const propertyName = query?.split(" ")[1];
+        if(node){
 
-            if(propertyName)
-
-            deleteNodeProperty(node.id, propertyName);
-    }
+                deleteNodeProperty(node.id, propertyName);
+        }
+    });
 
 }
 
@@ -155,4 +158,41 @@ export const deleteConnectionPropertyFromQuery = (query?: string) => {
 
         if(propertyName) deleteConnectionProperty(connections.find(conn => (conn.from === fromNode.id && conn.to === toNode.id) || (conn.from === toNode.id && conn.to === fromNode.id))?.id || "", propertyName);
     }
+}
+
+export const importFromQuery = (_?: string) => {
+
+    /**
+     * Formato de la query
+     * Import: JSON
+     */
+
+        try {
+            
+
+            // Abrir el explorador de archivos para seleccionar un archivo JSON
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = ".json";
+            input.onchange = (e) => {
+                const file = (e.target as HTMLInputElement).files?.[0];
+                if(file){
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const json = JSON.parse(event.target?.result as string);
+                            setNodes(json.nodes);
+                            setConnections(json.connections);
+                        } catch (error) {
+                            console.error("Invalid JSON in file");
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
+
+        } catch (error) {
+            console.error("Invalid JSON");
+        }
 }

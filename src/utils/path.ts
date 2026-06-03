@@ -1,5 +1,6 @@
 import { CanvasKit } from "canvaskit-wasm";
 import { Node } from "../models/nodes";
+import { Connection } from "../models/connections";
 
 const MARGIN = 50;
 const PADDING = 5;
@@ -46,6 +47,16 @@ function getBestSide(node: Node, targetCenter: {x: number, y: number}) {
     return dots.reduce((best, cur) => cur.dot > best.dot ? cur : best).side;
 }
 
+function getLocalSide(local?: string){
+    switch(local){
+        case "TOP": return CONTROL_POINT.TOP;
+        case "BOTTOM": return CONTROL_POINT.BOTTOM;
+        case "LEFT": return CONTROL_POINT.LEFT;
+        case "RIGHT": return CONTROL_POINT.RIGHT;
+        default: return null;
+    }
+}
+
 function getOutDirection(side: CONTROL_POINT) {
     switch(side) {
         case CONTROL_POINT.RIGHT:  return { x: 1, y: 0 };
@@ -55,20 +66,27 @@ function getOutDirection(side: CONTROL_POINT) {
     }
 }
 
+//const DIRECT_PATH = 0;
 const CURVE_PATH = 1;
-const BASIC_PATH = 2;
+const CENTERS_PATH = 2;
+const RECT_PATH = 3;
+const RECT_PATH2 = 4;
+const STEP_PATH = 5;
+const STEP_PATH2 = 6;
 
-export function NodeToNode(CK : CanvasKit, node1 : Node, node2: Node, tipo : number){
+export function NodeToNode(CK : CanvasKit, node1 : Node, node2: Node, conn: Connection) {
 
     const path = new CK.Path();
     
     const c1 = centerOf(node1);
     const c2 = centerOf(node2);
 
-    if(tipo === BASIC_PATH) return path.moveTo(c1.x, c1.y).lineTo(c2.x, c2.y);
+    const tipo = conn.tipo;
 
-    const side1 = getBestSide(node1, c2);
-    const side2 = getBestSide(node2, c1);
+    if(tipo === CENTERS_PATH) return path.moveTo(c1.x, c1.y).lineTo(c2.x, c2.y);
+
+    const side1 = getLocalSide(conn.properties.fromPoint) || getBestSide(node1, c2);
+    const side2 = getLocalSide(conn.properties.toPoint) || getBestSide(node2, c1);
 
     const start = getPoint(side1, node1);
     const end   = getPoint(side2, node2);
@@ -88,6 +106,26 @@ export function NodeToNode(CK : CanvasKit, node1 : Node, node2: Node, tipo : num
 
         path.cubicTo(cp1.x, cp1.y, cp2.x, cp2.y, end.x, end.y);
 
+    } else if(tipo === RECT_PATH) {
+
+        path.lineTo(start.x, end.y);
+
+        path.lineTo(end.x, end.y);
+    } else if(tipo === RECT_PATH2) {
+
+        path.lineTo(end.x, start.y);
+        path.lineTo(end.x, end.y);
+
+    } else if(tipo === STEP_PATH) {
+        path.lineTo(start.x, start.y + (end.y - start.y) / 2);
+        path.lineTo(end.x, start.y + (end.y - start.y) / 2);
+
+        path.lineTo(end.x, end.y);
+    } else if(tipo === STEP_PATH2) {
+        path.lineTo(start.x + (end.x - start.x) / 2, start.y);
+        path.lineTo(start.x + (end.x - start.x) / 2, end.y);
+
+        path.lineTo(end.x, end.y);
     } else {
         path.lineTo(end.x, end.y);
     }
