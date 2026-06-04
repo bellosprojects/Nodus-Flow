@@ -7,10 +7,13 @@ import { showToast } from "./models/toast";
 import { updateRoomId } from "./models/userStore";
 import { initializeGlobalKeyboardEvents, removeGlobalKeyboardEvents } from "./utils/keyboard";
 import "./App.css";
+import "./index.css";
+import { LicenseGuard } from "./components/LicenseGuard";
 
 const startView : 'lobby' | 'editor' = 'lobby';
 
-function App() {
+function NodusFlowApp() {
+
     const [currentView, setCurrentView] = createSignal<'lobby' | 'editor'>(startView);
     let canvasRef : HTMLCanvasElement | undefined;
 
@@ -46,6 +49,7 @@ function App() {
     return (
         <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
         
+
             <canvas 
                 ref={canvasRef}
                 style={{
@@ -69,6 +73,16 @@ function App() {
 
         </div>
     );
+}
+
+function App() {
+
+    return (
+        <LicenseGuard>
+            <NodusFlowApp />
+        </LicenseGuard>
+    )
+
 }
 
 export default App;

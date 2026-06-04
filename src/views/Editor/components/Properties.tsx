@@ -5,7 +5,7 @@ import { isEditPanelOpen } from "../Editor";
 import deleteIcon from "../../../assets/delete.svg";
 
 import styles from "../Editor.module.css";
-import { addConnectionProperty, Connection, connections, deleteConnectionProperty, selectedConnection, selectedConnectionId } from "../../../models/connections";
+import { addConnectionProperty, deleteConnectionProperty, selectedConnection, selectedConnectionId } from "../../../models/connections";
 
 export const [propertiesView, setPropertiesView] = createSignal<"base" | "advanced">("base");
 
@@ -157,7 +157,8 @@ const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
         "dashedBorder",
         "borderWidth",
         "dashedUnderline",
-        "widespread",
+        "disjointMembership",
+        "overlappingMembership",
         "textAbove", 
         "textBelow", 
         "textLeft",
@@ -315,8 +316,7 @@ const ConnectionPropertiesAdder = (props: {connId: string}) => {
     );
 }
 
-const ConnectionProperties = (props: {connID: string}) => {
-    const { connID } = props;
+const ConnectionProperties = () => {
 
     const conn = createMemo(() => selectedConnection());
 
@@ -368,7 +368,7 @@ export const Properties = () => {
                     </header>
 
                     <Show when={selectedConnectionId() !== null}>
-                        <ConnectionProperties connID={selectedConnectionId()!} />
+                        <ConnectionProperties/>
                     </Show>
 
                     <Show when={selectedConnectionId() === null}>

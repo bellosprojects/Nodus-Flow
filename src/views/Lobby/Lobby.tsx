@@ -7,6 +7,8 @@ import style from "./Lobby.module.css";
 import { generateRandomRoomId } from "../../utils/network";
 import { updateRoomId, updateUserName, userData } from "../../models/userStore";
 import { setViewMouseHandlers } from "../../utils/mouse";
+import { useLicense } from "../../services/license";
+import { Show } from "solid-js";
 
 let mousePos = {
     x: 0,
@@ -63,6 +65,8 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
 
     const nodus = nodusCanvas;
 
+    const {deviceId, daysLeft, expiryDate} = useLicense();
+
     nodus.setDraw(() => {
         drawInfiniteFloor(nodusCanvas.getCanvas(), nodusCanvas.getCK());
         drawGrid(mousePos);
@@ -110,6 +114,14 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
             { CREATE_FLOW(startFlow, joinFlow) }
             { USERNAME_INPUT(changeUserName)}
             { COPYRIGHT() }
+
+            <Show when={daysLeft() !== null && expiryDate() !== null}>
+                <div class={style.deviceInfo}>
+                    <p>Dispositivo ID: {deviceId()}</p>
+                    <p>Días restantes: {daysLeft()}</p>
+                    <p>Fecha de expiración: {expiryDate()?.toLocaleDateString('es-ES')}</p>
+                </div>
+            </Show>
         </div>
         
     );

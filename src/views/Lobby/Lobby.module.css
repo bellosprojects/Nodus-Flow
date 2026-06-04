@@ -153,8 +153,6 @@
     color: white;
     font-family: monospace;
     font-size: 18px;
-    letter-spacing: 1px;
-    text-shadow: 0 0 5px rgba(200,200,200,0.8);
 }
 
 .recentUsed {
@@ -204,4 +202,15 @@
     display: flex;
     flex-direction: column;
     align-items: start;
+}
+
+.deviceInfo {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    color: #c5e7e0;
+    font-family: monospace;
+    font-size: 14px;
+    text-align: right;
+    padding: 5px 10px;
 }
