@@ -794,14 +794,21 @@ export const drawPings = () => {
     paint.delete();
 }
 
-export const exportDiagramAsPng = async () => {
+export const exportDiagramAsPng = async (qualityLoss: number = 0) => {
     const toastId = showToast("Preparing for export...", ToastType.PROCESSING);
 
     const bounds = calculateDiagramBounds(nodes);
 
     const CK = nodusCanvas.getCK();
 
-    const sufrace = CK.MakeSurface(bounds.width, bounds.height);
+    // qualityLoss: integer where 0 => max quality (4x), 1 => 3x, 2 => 2x, 3 => 1x
+    const qLoss = Math.max(0, Math.round(qualityLoss || 0));
+    const scaleFactor = Math.max(1, 4 - qLoss);
+
+    const surfaceWidth = Math.max(1, Math.ceil(bounds.width * scaleFactor));
+    const surfaceHeight = Math.max(1, Math.ceil(bounds.height * scaleFactor));
+
+    const sufrace = CK.MakeSurface(surfaceWidth, surfaceHeight);
     if(!sufrace){
         removeToast(toastId);
         showToast("Error creating rendering surface", ToastType.ERROR);
@@ -812,7 +819,11 @@ export const exportDiagramAsPng = async () => {
 
     canvas.clear(CK.TRANSPARENT);
 
+    // Translate first, then scale so the translation is applied relative to the scaled canvas
     canvas.translate(-bounds.x, -bounds.y);
+    if (scaleFactor !== 1) {
+        canvas.scale(scaleFactor, scaleFactor);
+    }
 
     nodes.filter(node => node.lock).forEach(node => {
         drawNode(CK, canvas, node, true);
