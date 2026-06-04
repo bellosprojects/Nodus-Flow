@@ -238,7 +238,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
         }
     }
 
-    if(node.properties.widespread){
+    if(node.properties.disjointMembership){
         paint.setStyle(CK.PaintStyle.Stroke);
         paint.setStrokeWidth(2);
         
@@ -247,10 +247,22 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
         const semiPath = new CK.Path();
         const cx = node.x + node.width / 2;
         const height = node.y + node.height;
-        semiPath.moveTo(node.x - 40, height);
-        semiPath.quadTo(cx, node.y + node.height + 100, node.x + node.width + 40, height);
+        semiPath.moveTo(node.x - 60, height + 40);
+        semiPath.quadTo(cx, node.y + node.height + 100, node.x + node.width + 60, height + 40);
         canvas.drawPath(semiPath, paint);
         semiPath.delete();
+    } else if(node.properties.overlappingMembership){
+        paint.setStyle(CK.PaintStyle.Stroke);
+        paint.setStrokeWidth(2);
+
+        const overlapPath = new CK.Path();
+        const y = node.y + node.height + 40;
+
+        overlapPath.moveTo(node.x - 60, y);
+        overlapPath.lineTo(node.x + node.width + 60, y);
+        overlapPath.dash(5, 5, 0);
+        canvas.drawPath(overlapPath, paint);
+        overlapPath.delete();
     }
 
     // Overlays: occupied / selected
@@ -333,72 +345,6 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
         }
     }
 
-<<<<<<< Updated upstream
-    /**
-     * Texto superior (opcional)
-     */
-
-    if(node.properties.textAbove){
-
-        const fontSize = node.properties.textAboveFontSize || 12;
-
-        const textAboveStyle = new CK.TextStyle({
-            color: CK.parseColorString(node.properties.textAboveColor || node.color),
-            fontSize: fontSize,
-            fontFamilies: ['Inter 28pt Mudium']
-        });
-
-        const textAboveParagraphStyle = new CK.ParagraphStyle({
-            textStyle: textAboveStyle,
-            textAlign: CK.TextAlign.Center,
-        });
-
-        const textAboveBuilder = CK.ParagraphBuilder.Make(textAboveParagraphStyle, nodusCanvas.getFont()!);
-
-        textAboveBuilder.addText(node.properties.textAbove);
-
-        const textAboveParagraph = textAboveBuilder.build();
-
-        textAboveParagraph.layout(node.width);
-
-        canvas.drawParagraph(textAboveParagraph, node.x, node.y - textAboveParagraph.getHeight() - (node.properties.textOffset || 5));
-
-        textAboveParagraph.delete();
-        textAboveBuilder.delete();
-    }
-
-    if(node.properties.textBelow){
-
-        const fontSize = node.properties.textBelowFontSize || 12;
-
-        const textBelowStyle = new CK.TextStyle({
-            color: CK.parseColorString(node.properties.textBelowColor || node.color),
-            fontSize: fontSize,
-            fontFamilies: ['Inter 28pt Mudium']
-        });
-
-        const textBelowParagraphStyle = new CK.ParagraphStyle({
-            textStyle: textBelowStyle,
-            textAlign: CK.TextAlign.Center,
-        });
-
-        const textBelowBuilder = CK.ParagraphBuilder.Make(textBelowParagraphStyle, nodusCanvas.getFont()!);
-
-        textBelowBuilder.addText(node.properties.textBelow);
-
-        const textBelowParagraph = textBelowBuilder.build();
-
-        textBelowParagraph.layout(node.width);
-
-        canvas.drawParagraph(textBelowParagraph, node.x, node.y + node.height + (node.properties.textOffset || 5));
-
-        textBelowParagraph.delete();
-        textBelowBuilder.delete();
-    }
-
-    if(shapePath) shapePath.delete();
-=======
->>>>>>> Stashed changes
     paint.delete();
 
     drawNodeOpcionalText(CK, canvas, node);
@@ -848,14 +794,21 @@ export const drawPings = () => {
     paint.delete();
 }
 
-export const exportDiagramAsPng = async () => {
+export const exportDiagramAsPng = async (qualityLoss: number = 0) => {
     const toastId = showToast("Preparing for export...", ToastType.PROCESSING);
 
     const bounds = calculateDiagramBounds(nodes);
 
     const CK = nodusCanvas.getCK();
 
-    const sufrace = CK.MakeSurface(bounds.width, bounds.height);
+    // qualityLoss: integer where 0 => max quality (4x), 1 => 3x, 2 => 2x, 3 => 1x
+    const qLoss = Math.max(0, Math.round(qualityLoss || 0));
+    const scaleFactor = Math.max(1, 4 - qLoss);
+
+    const surfaceWidth = Math.max(1, Math.ceil(bounds.width * scaleFactor));
+    const surfaceHeight = Math.max(1, Math.ceil(bounds.height * scaleFactor));
+
+    const sufrace = CK.MakeSurface(surfaceWidth, surfaceHeight);
     if(!sufrace){
         removeToast(toastId);
         showToast("Error creating rendering surface", ToastType.ERROR);
@@ -866,7 +819,11 @@ export const exportDiagramAsPng = async () => {
 
     canvas.clear(CK.TRANSPARENT);
 
+    // Translate first, then scale so the translation is applied relative to the scaled canvas
     canvas.translate(-bounds.x, -bounds.y);
+    if (scaleFactor !== 1) {
+        canvas.scale(scaleFactor, scaleFactor);
+    }
 
     nodes.filter(node => node.lock).forEach(node => {
         drawNode(CK, canvas, node, true);
@@ -930,8 +887,6 @@ export const drawSelectionRect = () => {
     paint.setStrokeWidth(1);
     paint.setColor(CK.Color(64,150,255,0.8));
     canvas.drawRRect(rect, paint);
-<<<<<<< Updated upstream
-=======
 
     paint.delete();
 }
@@ -947,6 +902,5 @@ export const drawConnectionPoint = (CK: CanvasKit, canvas: Canvas, point: {x: nu
     paint.setStrokeWidth(1);
     canvas.drawCircle(point.x, point.y, 5, paint);
 
->>>>>>> Stashed changes
     paint.delete();
 }
