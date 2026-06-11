@@ -1,43 +1,255 @@
 import { createSignal, For, Match, Show, Switch, createMemo } from "solid-js";
-import { activeNode, finalizeNodePosition, finalizeNodeSize, showPropertiesPanel, updateNodeColor, updateNodeOpacity, updateNodePosition, updateNodeRadius, updateNodeSize, updateNodoTitle, changeNodeStyle, Node, addNodeProperty, deleteNodeProperty } from "../../../models/nodes";
+
+import { 
+    activeNode, 
+    finalizeNodePosition, 
+    finalizeNodeSize, 
+    showPropertiesPanel, 
+    updateNodeColor, 
+    updateNodeOpacity, 
+    updateNodePosition, 
+    updateNodeRadius, 
+    updateNodeSize, 
+    updateNodoTitle, 
+    changeNodeStyle, 
+    Node, 
+    addNodeProperty 
+} from "../../../models/nodes";
+
 import { isEditPanelOpen } from "../Editor";
 
 import deleteIcon from "../../../assets/delete.svg";
 
 import styles from "../Editor.module.css";
-import { addConnectionProperty, deleteConnectionProperty, selectedConnection, selectedConnectionId } from "../../../models/connections";
+import { addConnectionProperty, selectedConnection, selectedConnectionId } from "../../../models/connections";
+
+import { 
+    actionUpdateNodeTitle, 
+    actionUpdateNodeColor, 
+    actionUpdateNodeOpacity, 
+    actionUpdateNodeRadius, 
+    actionChangeNodeStyle,
+    actionSetNodeProperty,
+    actionDeleteNodeProperty,
+    actionSetConnectionProperty,
+    actionDeleteConnectionProperty,
+    actionFinalizeNodeResize,
+    actionFinalizeNodeMove
+} from "../../../core/actions";
 
 export const [propertiesView, setPropertiesView] = createSignal<"base" | "advanced">("base");
 
-export const BaseProperties = (props: {node: Node}) => {
+// Variables para almacenar los valores antes del cambio
+let widthSnapshot = 0;
+let heightSnapshot = 0;
+let xSnapshot = 0;
+let ySnapshot = 0;
 
+export const BaseProperties = (props: {node: Node}) => {
     const { node } = props;
 
-    return (
+    // Manejadores para Width
+    const handleWidthFocus = () => {
+        widthSnapshot = node.width;
+    };
 
+    const handleWidthChange = (e: Event) => {
+        const newWidth = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newWidth)) return;
+        updateNodeSize(node.id, newWidth, node.height);
+    };
+
+    const handleWidthBlur = (e: Event) => {
+        const newWidth = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newWidth)) return;
+        
+        if (widthSnapshot !== newWidth) {
+            actionFinalizeNodeResize(node.id, widthSnapshot, node.height, node.x, node.y);
+        }
+        finalizeNodeSize(node.id);
+        widthSnapshot = 0;
+    };
+
+    // Manejadores para Height
+    const handleHeightFocus = () => {
+        heightSnapshot = node.height;
+    };
+
+    const handleHeightChange = (e: Event) => {
+        const newHeight = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newHeight)) return;
+        updateNodeSize(node.id, node.width, newHeight);
+    };
+
+    const handleHeightBlur = (e: Event) => {
+        const newHeight = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newHeight)) return;
+        
+        if (heightSnapshot !== newHeight) {
+            actionFinalizeNodeResize(node.id, node.width, heightSnapshot, node.x, node.y);
+        }
+        finalizeNodeSize(node.id);
+        heightSnapshot = 0;
+    };
+
+    // Manejadores para X
+    const handleXFocus = () => {
+        xSnapshot = node.x;
+    };
+
+    const handleXChange = (e: Event) => {
+        const newX = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newX)) return;
+        updateNodePosition(node.id, newX - node.x, 0);
+    };
+
+    const handleXBlur = (e: Event) => {
+        const newX = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newX)) return;
+        
+        if (xSnapshot !== newX) {
+            actionFinalizeNodeMove(node.id, xSnapshot, node.y);
+        }
+        finalizeNodePosition(node.id);
+        xSnapshot = 0;
+    };
+
+    // Manejadores para Y
+    const handleYFocus = () => {
+        ySnapshot = node.y;
+    };
+
+    const handleYChange = (e: Event) => {
+        const newY = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newY)) return;
+        updateNodePosition(node.id, 0, newY - node.y);
+    };
+
+    const handleYBlur = (e: Event) => {
+        const newY = parseInt((e.target as HTMLInputElement).value);
+        if (isNaN(newY)) return;
+        
+        if (ySnapshot !== newY) {
+            actionFinalizeNodeMove(node.id, node.x, ySnapshot);
+        }
+        finalizeNodePosition(node.id);
+        ySnapshot = 0;
+    };
+
+    // Manejador para Title
+    let titleSnapshot = "";
+    const handleTitleFocus = () => {
+        titleSnapshot = node.title || "";
+    };
+
+    const handleTitleChange = (e: Event) => {
+        const newTitle = (e.target as HTMLInputElement).value;
+        updateNodoTitle(node.id, newTitle);
+    };
+
+    const handleTitleBlur = (e: Event) => {
+        const newTitle = (e.target as HTMLInputElement).value;
+        if (titleSnapshot !== newTitle) {
+            actionUpdateNodeTitle(node.id, newTitle);
+        }
+    };
+
+    // Manejador para Color
+    let colorSnapshot = "";
+    const handleColorFocus = () => {
+        colorSnapshot = node.color;
+    };
+
+    const handleColorChange = (e: Event) => {
+        const newColor = (e.target as HTMLInputElement).value;
+        updateNodeColor(node.id, newColor);
+    };
+
+    const handleColorBlur = (e: Event) => {
+        const newColor = (e.target as HTMLInputElement).value;
+        if (colorSnapshot !== newColor) {
+            actionUpdateNodeColor(node.id, newColor);
+        }
+    };
+
+    // Manejador para Opacity
+    let opacitySnapshot = 0;
+    const handleOpacityFocus = () => {
+        opacitySnapshot = node.opacity;
+    };
+
+    const handleOpacityChange = (e: Event) => {
+        const newOpacity = parseFloat((e.target as HTMLInputElement).value);
+        updateNodeOpacity(node.id, newOpacity);
+    };
+
+    const handleOpacityBlur = (e: Event) => {
+        const newOpacity = parseFloat((e.target as HTMLInputElement).value);
+        if (opacitySnapshot !== newOpacity) {
+            actionUpdateNodeOpacity(node.id, newOpacity);
+        }
+    };
+
+    // Manejador para Radius
+    let radiusSnapshot = 0;
+    const handleRadiusFocus = () => {
+        radiusSnapshot = node.radius;
+    };
+
+    const handleRadiusChange = (e: Event) => {
+        const newRadius = parseFloat((e.target as HTMLInputElement).value);
+        updateNodeRadius(node.id, newRadius);
+    };
+
+    const handleRadiusBlur = (e: Event) => {
+        const newRadius = parseFloat((e.target as HTMLInputElement).value);
+        if (radiusSnapshot !== newRadius) {
+            actionUpdateNodeRadius(node.id, newRadius);
+        }
+    };
+
+    // Manejador para Style
+    let styleSnapshot = 0;
+    const handleStyleFocus = () => {
+        styleSnapshot = node.style;
+    };
+
+    const handleStyleChange = (e: Event) => {
+        const newStyle = parseInt((e.target as HTMLInputElement).value);
+        changeNodeStyle(node.id, newStyle);
+    };
+
+    const handleStyleBlur = (e: Event) => {
+        const newStyle = parseInt((e.target as HTMLInputElement).value);
+        if (styleSnapshot !== newStyle) {
+            actionChangeNodeStyle(node.id, newStyle);
+        }
+    };
+
+    return (
         <>
             <section class="prop-section">
                 <label>Dimensions</label>
                 <div class="input-grid">
                     <div class="input-group">
-                    <span class="unit">W</span>
-                    <input 
-                        type="number" 
-                        value={Math.round(node.width)} 
-                        onInput={(e) => updateNodeSize(node.id, +e.currentTarget.value, node.height)}
-                        onChange={(_) => finalizeNodeSize(node.id)}
-                        onBlur={(_) => finalizeNodeSize(node.id)}
-                    />
+                        <span class="unit">W</span>
+                        <input 
+                            type="number" 
+                            value={Math.round(node.width)} 
+                            onFocus={handleWidthFocus}
+                            onInput={handleWidthChange}
+                            onBlur={handleWidthBlur}
+                        />
                     </div>
                     <div class="input-group">
-                    <span class="unit">H</span>
-                    <input 
-                        type="number" 
-                        value={Math.round(node.height)} 
-                        onInput={(e) => updateNodeSize(node.id, node.width, +e.currentTarget.value)}
-                        onChange={(_) => finalizeNodeSize(node.id)} 
-                        onBlur={(_) => finalizeNodeSize(node.id)}                       
-                    />
+                        <span class="unit">H</span>
+                        <input 
+                            type="number" 
+                            value={Math.round(node.height)} 
+                            onFocus={handleHeightFocus}
+                            onInput={handleHeightChange}
+                            onBlur={handleHeightBlur}
+                        />
                     </div>
                 </div>
             </section>
@@ -46,24 +258,24 @@ export const BaseProperties = (props: {node: Node}) => {
                 <label>Coordenadas</label>
                 <div class="input-grid">
                     <div class="input-group">
-                    <span class="unit">X</span>
-                    <input 
-                        type="number" 
-                        value={Math.round(node.x)} 
-                        onInput={(e) => updateNodePosition(node.id, (+e.currentTarget.value || 0) - node.x, 0)}
-                        onChange={(_) => finalizeNodePosition(node.id)}
-                        onBlur={(_) => finalizeNodePosition(node.id)}
-                    />
+                        <span class="unit">X</span>
+                        <input 
+                            type="number" 
+                            value={Math.round(node.x)} 
+                            onFocus={handleXFocus}
+                            onInput={handleXChange}
+                            onBlur={handleXBlur}
+                        />
                     </div>
                     <div class="input-group">
-                    <span class="unit">Y</span>
-                    <input 
-                        type="number" 
-                        value={Math.round(node.y)} 
-                        onInput={(e) => updateNodePosition(node.id, 0, (+e.currentTarget.value || 0) - node.y)}
-                        onChange={(_) => finalizeNodePosition(node.id)}      
-                        onBlur={(_) => finalizeNodePosition(node.id)}                  
-                    />
+                        <span class="unit">Y</span>
+                        <input 
+                            type="number" 
+                            value={Math.round(node.y)} 
+                            onFocus={handleYFocus}
+                            onInput={handleYChange}
+                            onBlur={handleYBlur}
+                        />
                     </div>
                 </div>
             </section>
@@ -78,7 +290,9 @@ export const BaseProperties = (props: {node: Node}) => {
                         spellcheck="false" 
                         value={node.title || ""}
                         placeholder="Enter a name..."
-                        onInput={(e) => updateNodoTitle(node.id, e.currentTarget.value)}
+                        onFocus={handleTitleFocus}
+                        onInput={handleTitleChange}
+                        onBlur={handleTitleBlur}
                         style={{width: "100%", background: "transparent", border: "none", color: "white", outline: "none"}}
                     />
                 </div>
@@ -91,10 +305,13 @@ export const BaseProperties = (props: {node: Node}) => {
                         type="color" 
                         value={node.color}
                         style={{width: "100%", border: "none", "border-radius": "8px"}}
-                        onInput={(e) => updateNodeColor(node.id, e.currentTarget.value)}
-                        />
+                        onFocus={handleColorFocus}
+                        onInput={handleColorChange}
+                        onBlur={handleColorBlur}
+                    />
                 </div>
             </section>
+
             <section class="prop-section">
                 <label>Opacity</label>
                 <div class="input-group">
@@ -103,20 +320,25 @@ export const BaseProperties = (props: {node: Node}) => {
                         step={"0.01"} 
                         style={{width: "100%"}}
                         value={node.opacity}
-                        onInput={(e) => updateNodeOpacity(node.id, parseFloat(e.currentTarget.value))}
+                        onFocus={handleOpacityFocus}
+                        onInput={handleOpacityChange}
+                        onBlur={handleOpacityBlur}
                     />
                 </div>
             </section>
+
             <section class="prop-section">
                 <label>Radius</label>
                 <div class="input-group">
-                        <input type="range"
+                    <input type="range"
                         min={"0"}
                         max={Math.min(node.height, node.width) / 2}
                         style={{width: "100%"}}
                         step={"1"}
                         value={node.radius}
-                        onInput={(e) => updateNodeRadius(node.id, parseFloat(e.currentTarget.value))}
+                        onFocus={handleRadiusFocus}
+                        onInput={handleRadiusChange}
+                        onBlur={handleRadiusBlur}
                     />
                 </div>
             </section>
@@ -125,8 +347,10 @@ export const BaseProperties = (props: {node: Node}) => {
                 <label>Style</label>
                 <div class="input-group">
                     <select value={node.style} 
-                    onInput={(e) => changeNodeStyle(node.id, parseInt(e.currentTarget.value))} 
-                    style={{width: "100%", background: "#1e1e1e", color: "white", border: "1px solid rgba(255,255,255,0.08)", "border-radius": "8px", padding: "6px"}}>
+                        onFocus={handleStyleFocus}
+                        onInput={handleStyleChange}
+                        onBlur={handleStyleBlur}
+                        style={{width: "100%", background: "#1e1e1e", color: "white", border: "1px solid rgba(255,255,255,0.08)", "border-radius": "8px", padding: "6px"}}>
                         <option value={1}>Rectangle</option>
                         <option value={2}>Ellipse</option>
                         <option value={3}>Diamond</option>
@@ -135,18 +359,16 @@ export const BaseProperties = (props: {node: Node}) => {
             </section>
         </>
     );
-
 }
 
 const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
-
     const { nodeId } = props;
     const [newPropKey, setNewPropKey] = createSignal("");
     const [newPropValue, setNewPropValue] = createSignal("");
 
     const addProperty = () => {
         if (newPropKey().trim() === "") return;
-        addNodeProperty(nodeId, newPropKey(), newPropValue());
+        actionSetNodeProperty(nodeId, newPropKey(), newPropValue() || "true");
         setNewPropKey("");
         setNewPropValue("");
     };
@@ -178,7 +400,6 @@ const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
 
     return (
         <div class={styles.formAddProperty} style={{margin: "10px 0"}}>
-
             <input 
                 type="text"
                 list="suggestedProps"
@@ -207,7 +428,6 @@ const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
                 autocapitalize="off"
                 spellcheck="false"
             />
-
             <span>
                 <button onClick={addProperty} style={{width: "100%", background: "rgba(255,255,255,0.1)", color: "white", border: "none", padding: "4px 0", "border-radius": "4px", cursor: "pointer"}}>Add Property</button>
             </span>
@@ -218,9 +438,33 @@ const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
 export const AdvancedProperties = (props: {node: Node}) => {
     const { node } = props;
 
+    // Variables para snapshot de propiedades
+    let propertySnapshots: Map<string, any> = new Map();
+
+    const handlePropertyFocus = (key: string) => {
+        propertySnapshots.set(key, node.properties[key] ?? "");
+    };
+
+    const handlePropertyChange = (key: string, e: Event) => {
+        const newValue = (e.target as HTMLInputElement).value;
+        addNodeProperty(node.id, key, newValue);
+    };
+
+    const handlePropertyBlur = (key: string, e: Event) => {
+        const newValue = (e.target as HTMLInputElement).value;
+        const oldValue = propertySnapshots.get(key);
+        if (oldValue !== newValue) {
+            actionSetNodeProperty(node.id, key, newValue);
+        }
+        propertySnapshots.delete(key);
+    };
+
+    const handleDeleteProperty = (key: string) => {
+        actionDeleteNodeProperty(node.id, key);
+    };
+
     return (
         <>
-
             <AdvancedPropertiesAdder nodeId={node.id} />
 
             <For each={Object.keys(node.properties)}>
@@ -234,15 +478,14 @@ export const AdvancedProperties = (props: {node: Node}) => {
                                 autocapitalize="off" 
                                 spellcheck="false" 
                                 value={node.properties[key] ?? ""}
-                                onInput={(e) => {
-                                    const newValue = e.currentTarget.value;
-                                    addNodeProperty(node.id, key, newValue);
-                                }}
+                                onFocus={() => handlePropertyFocus(key)}
+                                onInput={(e) => handlePropertyChange(key, e)}
+                                onBlur={(e) => handlePropertyBlur(key, e)}
                                 style={{width: "100%", background: "transparent", border: "none", color: "white", outline: "none"}}
                             />
                             <img src={deleteIcon} alt="Delete"
                                 class={styles.deletePropertyIcon}
-                                onClick={() => deleteNodeProperty(node.id, key)}
+                                onClick={() => handleDeleteProperty(key)}
                             />
                         </div>
                     </section>
@@ -253,14 +496,13 @@ export const AdvancedProperties = (props: {node: Node}) => {
 };
 
 const ConnectionPropertiesAdder = (props: {connId: string}) => {
-
     const { connId } = props;
     const [newPropKey, setNewPropKey] = createSignal("");
     const [newPropValue, setNewPropValue] = createSignal("");
 
     const addProperty = () => {
         if (newPropKey().trim() === "") return;
-        addConnectionProperty(connId, newPropKey(), newPropValue());
+        actionSetConnectionProperty(connId, newPropKey(), newPropValue() || "true");
         setNewPropKey("");
         setNewPropValue("");
     };
@@ -317,92 +559,115 @@ const ConnectionPropertiesAdder = (props: {connId: string}) => {
 }
 
 const ConnectionProperties = () => {
-
     const conn = createMemo(() => selectedConnection());
 
-    return (
-        <Show when={conn()}>
-            <div class={styles.formAddProperty} style={{margin: "10px 0"}}>
-                
-                <ConnectionPropertiesAdder connId={conn()!.id} />
+    // Variables para snapshot de propiedades de conexión
+    let propertySnapshots: Map<string, any> = new Map();
 
-                <For each={Object.keys(conn()!.properties ?? {})}>
-                    {(key) => (
-                        <section class="prop-section">
-                            <label>{key}</label>
-                            <div class={styles.advancedPropertyRow}>
-                                <input type="text"
-                                    autocomplete="off" 
-                                    autocorrect="off" 
-                                    autocapitalize="off" 
-                                    spellcheck="false" 
-                                    value={conn()!.properties[key] ?? ""}
-                                    onInput={(e) => {
-                                        const newValue = e.currentTarget.value;
-                                        addConnectionProperty(conn()!.id, key, newValue);
-                                    }}
-                                    style={{width: "100%", background: "transparent", border: "none", color: "white", outline: "none"}}
-                                />
-                                <img src={deleteIcon} alt="Delete"
-                                    class={styles.deletePropertyIcon}
-                                    onClick={() => deleteConnectionProperty(conn()!.id, key)}
-                                />
-                            </div>
-                        </section>
-                    )}
-                </For>
-            </div>
-        </Show>
+    const handlePropertyFocus = (key: string) => {
+        if (!conn()) return;
+        propertySnapshots.set(key, conn()!.properties?.[key] ?? "");
+    };
+
+    const handlePropertyChange = (key: string, e: Event) => {
+        if (!conn()) return;
+        const newValue = (e.target as HTMLInputElement).value;
+        addConnectionProperty(conn()!.id, key, newValue);
+    };
+
+    const handlePropertyBlur = (key: string, e: Event) => {
+        if (!conn()) return;
+        const newValue = (e.target as HTMLInputElement).value;
+        const oldValue = propertySnapshots.get(key);
+        if (oldValue !== newValue) {
+            actionSetConnectionProperty(conn()!.id, key, newValue);
+        }
+        propertySnapshots.delete(key);
+    };
+
+    const handleDeleteProperty = (key: string) => {
+        if (!conn()) return;
+        actionDeleteConnectionProperty(conn()!.id, key);
+    };
+
+    if (!conn()) return null;
+
+    return (
+        <div class={styles.formAddProperty} style={{margin: "10px 0"}}>
+            <ConnectionPropertiesAdder connId={conn()!.id} />
+
+            <For each={Object.keys(conn()!.properties ?? {})}>
+                {(key) => (
+                    <section class="prop-section">
+                        <label>{key}</label>
+                        <div class={styles.advancedPropertyRow}>
+                            <input type="text"
+                                autocomplete="off" 
+                                autocorrect="off" 
+                                autocapitalize="off" 
+                                spellcheck="false" 
+                                value={conn()!.properties[key] ?? ""}
+                                onFocus={() => handlePropertyFocus(key)}
+                                onInput={(e) => handlePropertyChange(key, e)}
+                                onBlur={(e) => handlePropertyBlur(key, e)}
+                                style={{width: "100%", background: "transparent", border: "none", color: "white", outline: "none"}}
+                            />
+                            <img src={deleteIcon} alt="Delete"
+                                class={styles.deletePropertyIcon}
+                                onClick={() => handleDeleteProperty(key)}
+                            />
+                        </div>
+                    </section>
+                )}
+            </For>
+        </div>
     );
 };
 
 export const Properties = () => {
-
     const node = activeNode();
 
     return (
         <Show when={showPropertiesPanel() && isEditPanelOpen()}>
-                <div class={styles.propertiesPanel}>
-                    <header>
-                        <span class="property-title">Properties Panel</span>
-                    </header>
+            <div class={styles.propertiesPanel}>
+                <header>
+                    <span class="property-title">Properties Panel</span>
+                </header>
 
-                    <Show when={selectedConnectionId() !== null}>
-                        <ConnectionProperties/>
-                    </Show>
+                <Show when={selectedConnectionId() !== null}>
+                    <ConnectionProperties/>
+                </Show>
 
-                    <Show when={selectedConnectionId() === null}>
+                <Show when={selectedConnectionId() === null && node}>
+                    <span class="property-object">Object: {node!.id}</span>
 
-                        <span class="property-object">Object: {node!.id}</span>
+                    <div class={styles.propertiesToggler}>
+                        <button 
+                            class={propertiesView() === "base" ? styles.active : ""}
+                            onClick={() => setPropertiesView("base")}
+                        >
+                            Basic
+                        </button>
+                        <button 
+                            class={propertiesView() === "advanced" ? styles.active : ""}
+                            onClick={() => setPropertiesView("advanced")}
+                        >
+                            Advanced
+                        </button>
+                    </div>
 
-                        <div class={styles.propertiesToggler}>
-                            <button 
-                                class={propertiesView() === "base" ? styles.active : ""}
-                                onClick={() => setPropertiesView("base")}
-                            >
-                                Basic
-                            </button>
-                            <button 
-                                class={propertiesView() === "advanced" ? styles.active : ""}
-                                onClick={() => setPropertiesView("advanced")}
-                            >
-                                Advanced
-                            </button>
-                        </div>
-
-                        <div class={styles.propertiesScroll}>
-                            <Switch>
-                                <Match when={propertiesView() === "base"}>
-                                    <BaseProperties node={node!} />
-                                </Match>
-                                <Match when={propertiesView() === "advanced"}>
-                                    <AdvancedProperties node={node!} />
-                                </Match>
-                            </Switch>
-                        </div>
-                    </Show>
-                </div>
+                    <div class={styles.propertiesScroll}>
+                        <Switch>
+                            <Match when={propertiesView() === "base"}>
+                                <BaseProperties node={node!} />
+                            </Match>
+                            <Match when={propertiesView() === "advanced"}>
+                                <AdvancedProperties node={node!} />
+                            </Match>
+                        </Switch>
+                    </div>
+                </Show>
+            </div>
         </Show>
     );
-    
 };

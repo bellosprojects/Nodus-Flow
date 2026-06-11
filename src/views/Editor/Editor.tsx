@@ -1,11 +1,11 @@
 import { Properties } from "./components/Properties";
-import { LEFT_TOOLBAR, USERS_PANEL, PROJECT_NAME, TOOL_BELT, LAYERS_PANEL, TOP_BUTTONS  } from "./components/Toolbars";
+import { LEFT_TOOLBAR, USERS_PANEL, PROJECT_NAME, TOOL_BELT, LAYERS_PANEL, TOP_BUTTONS } from "./components/Toolbars";
 import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupar, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
 import { lerp } from "../../utils/math";
-import { setDraggedNodeId, draggedNodeId, draggedNode  } from "../../models/nodes";
-import { addConnection, connections, setConnections, setSelectedConnectionId, addConnectionProperty } from "../../models/connections";
-import { moveNodeThrottle, socket, initSocket, closeSocket, sendEvent } from "../../core/socket";
-import {  createEffect, createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
+import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
+import { addConnection, connections, setConnections, setSelectedConnectionId, addConnectionProperty, changeConnectionStyle } from "../../models/connections";
+import { moveNodeThrottle, wsService } from "../../core/socket";
+import { createEffect, createSignal, Match, onCleanup, onMount, Switch, createMemo, createSelector } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
 import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, resizingDots, setFocusedPoint, setResizingDots, drawNodeGrid, drawConnectionPoint, setSourceAnchorPoint } from "../../core/renderer";
 import "../../App.css";
@@ -21,6 +21,12 @@ import { showToast } from "../../models/toast";
 import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../../utils/keyboard";
 import { manageResizing } from "../../utils/resizing";
 import { calculateDiagramBounds } from "../../utils/path";
+import { 
+    captureNodesSnapshot, 
+    actionFinalizeMultipleNodesMove, 
+    actionFinalizeMultipleNodesResize,
+} from "../../core/actions";
+import { getNode } from "solid-js/store/types/store.js";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
@@ -30,7 +36,8 @@ export const [isConfigPanelOpen, setIsConfigPanelOpen] = createSignal(false);
 export const [isResizing, setIsResizing] = createSignal(false);
 export const [referencePoint, setReferencePoint] = createSignal<{x: number, y: number} | null>(null);
 export const [resizingBox, setResizingBox] = createSignal<{x: number, y:number, width:number, height: number}| null>(null);
-export let resizingNodesCopy : Node[] = [];
+export let resizingNodesCopy: Node[] = [];
+export let nodesMoveSnapshot: { id: string; x: number; y: number; width: number; height: number }[] = [];
 
 export const [mouseOption, setMouseOption] = createSignal<'move' | 'select' | 'connect'>('move');
 export const [layerView, setLayerView] = createSignal<'nodes' | 'connections'>('nodes');
@@ -40,6 +47,31 @@ export let flowConecctions = 0;
 
 export let selectionRect = { x0: 0, y0: 0, x1: 0, y1: 0};
 export let mousePos = { x: 0, y: 0};
+
+let viewportBounds = {x: 0, y: 0, width: 0, height: 0};
+let lastViewportUpdate = 0;
+const VIEWPORT_MARGIN = 200;
+
+function updateViewportBounds() {
+    const zoom = nodusCanvas.camera.zoom();
+    const offsetX = nodusCanvas.camera.offsetX();
+    const offsetY = nodusCanvas.camera.offsetY();
+    
+    viewportBounds = {
+        x: -offsetX / zoom - VIEWPORT_MARGIN,
+        y: -offsetY / zoom - VIEWPORT_MARGIN,
+        width: window.innerWidth / zoom + VIEWPORT_MARGIN * 2,
+        height: window.innerHeight / zoom + VIEWPORT_MARGIN * 2
+    };
+    lastViewportUpdate = Date.now();
+}
+
+function isNodeVisible(node: Node): boolean {
+    return !(node.x + node.width < viewportBounds.x ||
+             node.x > viewportBounds.x + viewportBounds.width ||
+             node.y + node.height < viewportBounds.y ||
+             node.y > viewportBounds.y + viewportBounds.height);
+}
 
 export enum ANCHOR_POINT{
     TOP = "TOP",
@@ -53,14 +85,14 @@ export enum ANCHOR_POINT{
 };
 
 const anchorPoints = [
-    {x: 0, y: 0, direction: ANCHOR_POINT.TOP_LEFT},
     {x: 0.5, y: 0, direction: ANCHOR_POINT.TOP},
-    {x: 1, y: 0, direction: ANCHOR_POINT.TOP_RIGHT},
     {x: 1, y: 0.5, direction: ANCHOR_POINT.RIGHT},
-    {x: 1, y: 1, direction: ANCHOR_POINT.BOTTOM_RIGHT},
     {x: 0.5, y: 1, direction: ANCHOR_POINT.BOTTOM},
+    {x: 0, y: 0.5, direction: ANCHOR_POINT.LEFT},
+    {x: 0, y: 0, direction: ANCHOR_POINT.TOP_LEFT},
+    {x: 1, y: 0, direction: ANCHOR_POINT.TOP_RIGHT},
     {x: 0, y: 1, direction: ANCHOR_POINT.BOTTOM_LEFT},
-    {x: 0, y: 0.5, direction: ANCHOR_POINT.LEFT}
+    {x: 1, y: 1, direction: ANCHOR_POINT.BOTTOM_RIGHT},
 ];
 
 export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => {
@@ -73,6 +105,9 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     let connectionSourcePoint: {x: number, y: number, direction: ANCHOR_POINT} | null = null;
 
     const handleMouseDown = (e: MouseEvent) => {
+
+        nodusCanvas.requestRedraw();
+
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
         }
@@ -90,7 +125,9 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         if(resizingPoint){
             setIsResizing(true);
             setReferencePoint({x: resizingPoint.x, y: resizingPoint.y});
+            // Guardar snapshot para el historial
             resizingNodesCopy = [...nodes].filter(node => selectedNodesIds().includes(node.id)).map(node => ({...node}));
+            nodesMoveSnapshot = captureNodesSnapshot(selectedNodesIds());
             const bounds = calculateDiagramBounds(selectedNodes());
             setResizingBox({
                 x: bounds.x + 20,
@@ -111,17 +148,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 isConnecting = true;
                 connectionSourceId = hit.id;
 
-                // compute nearest anchor on the source node
-                const points = [
-                    {x: hit.x + 0 * hit.width, y: hit.y + 0 * hit.height, direction: ANCHOR_POINT.TOP_LEFT},
-                    {x: hit.x + 0.5 * hit.width, y: hit.y + 0 * hit.height, direction: ANCHOR_POINT.TOP},
-                    {x: hit.x + 1 * hit.width, y: hit.y + 0 * hit.height, direction: ANCHOR_POINT.TOP_RIGHT},
-                    {x: hit.x + 1 * hit.width, y: hit.y + 0.5 * hit.height, direction: ANCHOR_POINT.RIGHT},
-                    {x: hit.x + 1 * hit.width, y: hit.y + 1 * hit.height, direction: ANCHOR_POINT.BOTTOM_RIGHT},
-                    {x: hit.x + 0.5 * hit.width, y: hit.y + 1 * hit.height, direction: ANCHOR_POINT.BOTTOM},
-                    {x: hit.x + 0 * hit.width, y: hit.y + 1 * hit.height, direction: ANCHOR_POINT.BOTTOM_LEFT},
-                    {x: hit.x + 0 * hit.width, y: hit.y + 0.5 * hit.height, direction: ANCHOR_POINT.LEFT}
-                ];
+                const points = anchorPoints.map(p => ({x: hit.x + hit.width * p.x, y: hit.y + hit.height * p.y, direction: p.direction}));
 
                 const center = {x: hit.x + hit.width / 2, y: hit.y + hit.height / 2};
                 const click = {x, y};
@@ -137,13 +164,12 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
                 const centerDist = Math.sqrt((center.x - click.x) * (center.x - click.x) + (center.y - click.y) * (center.y - click.y));
 
-                // if clicked near center or the nearest is a corner, don't use a source anchor
-                if(centerDist < 20 || [ANCHOR_POINT.TOP_LEFT, ANCHOR_POINT.TOP_RIGHT, ANCHOR_POINT.BOTTOM_LEFT, ANCHOR_POINT.BOTTOM_RIGHT].includes(nearest.direction)){
+                if(centerDist < minDist){
                     connectionSourcePoint = null;
                     setSourceAnchorPoint(null);
                 } else {
                     connectionSourcePoint = { x: nearest.x, y: nearest.y, direction: nearest.direction };
-                    setSourceAnchorPoint(connectionSourcePoint as any);
+                    setSourceAnchorPoint(connectionSourcePoint);
                 }
             }
             return;
@@ -163,6 +189,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             if(mouseOption() == 'move' && ocupadoPor(hit.id) === undefined){
                 if(!hit.lock){
                     setDraggedNodeId(hit.id);
+                    // Capturar snapshot para el historial al inicio del arrastre
+                    nodesMoveSnapshot = captureNodesSnapshot(selectedNodesIds().length > 0 ? selectedNodesIds() : [hit.id]);
                 }
             }
         } else {
@@ -181,12 +209,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
         mousePos = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
-        sendEvent({
+        wsService.sendEvent({
             tipo: "mover_cursor",
             x: mousePos.x,
             y: mousePos.y,
             nombre: userData.name
-        });
+        }, false);
+
+        nodusCanvas.requestRedraw();
 
         //Primero verificamos si es resizing
         if(isResizing()){
@@ -204,7 +234,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         }
 
         if(mouseOption() === 'connect'){
-            // Buscar un punto cardinal de un nodo debajo del cursor para hacer snap
             const snapNode = [...nodes].reverse().find(node =>
                 mousePos.x >= node.x - 10 && mousePos.x <= node.x + node.width + 10 &&
                 mousePos.y >= node.y - 10 && mousePos.y <= node.y + node.height + 10
@@ -226,6 +255,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
                 connectionPoint = snapPoint? {x: snapPoint.x, y: snapPoint.y, direction: snapPoint.direction} : null;
                 
+            } else {
+                connectionPoint = null;
             }
         };
         
@@ -260,25 +291,47 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             updateNodePosition(draggedNodeId()!, deltaX, deltaY);
             moveNodeThrottle([{id: draggedNode()!.id, x: draggedNode()!.x, y: draggedNode()!.y}]);
         }
-
     };
 
     const handleMouseUp = (e : MouseEvent) => {
 
+        nodusCanvas.requestRedraw();
+
+        // Finalizar resize - registrar en historial
         if(isResizing()){
+            const currentNodes = selectedNodesIds().map(id => {
+                const node = nodes.find(n => n.id === id);
+                return node ? { id, width: node.width, height: node.height, x: node.x, y: node.y } : null;
+            }).filter(Boolean);
+            
+            // Registrar el resize en el historial si hubo cambios
+            if (nodesMoveSnapshot.length > 0 && currentNodes.length > 0) {
+                const hasChanges = nodesMoveSnapshot.some((snapshot, i) => {
+                    const current = currentNodes[i];
+                    return current && (current.width !== snapshot.width || 
+                                      current.height !== snapshot.height ||
+                                      current.x !== snapshot.x ||
+                                      current.y !== snapshot.y);
+                });
+                
+                if (hasChanges) {
+                    actionFinalizeMultipleNodesResize(nodesMoveSnapshot as any);
+                }
+            }
+            
             selectedNodesIds().forEach(id => {
                 finalizeNodePosition(id);
                 finalizeNodeSize(id);
-            })
+            });
             setIsResizing(false);
             setFocusedPoint(null);
             setReferencePoint(null);
             setResizingBox(null);
             resizingNodesCopy = [];
+            nodesMoveSnapshot = [];
         }
 
         if (isSelecting){
-
             setSelectedNodesIds(nodes.filter(node => {
                 const minX = Math.min(selectionRect.x0, selectionRect.x1);
                 const maxX = Math.max(selectionRect.x0, selectionRect.x1);
@@ -294,7 +347,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             }).map(it => it.id));
 
             isSelecting = false;
-
             return;
         }
 
@@ -308,13 +360,19 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             );
 
             if(target && target.id !== connectionSourceId){
-                const newId = addConnection(connectionSourceId, target.id);
+                const newId = addConnection(connectionSourceId, target.id)?.id;
                 if(newId){
                     if(connectionSourcePoint){
                         addConnectionProperty(newId, 'fromPoint', connectionSourcePoint.direction);
                     }
                     if(connectionPoint){
                         addConnectionProperty(newId, 'toPoint', connectionPoint.direction);
+                    }
+                    if(e.altKey){
+                        addConnectionProperty(newId, 'dashed', 'true');
+                    }
+                    if(e.ctrlKey || e.metaKey){
+                        changeConnectionStyle(newId, 7);
                     }
                 }
             }
@@ -325,13 +383,21 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         connectionSourcePoint = null;
         setSourceAnchorPoint(null);
 
-        if(draggedNodeId()) {
+        // Finalizar movimiento de nodos - registrar en historial
+        if(draggedNodeId() && draggedNodeId() !== "root") {
+            
+            // Registrar el movimiento en el historial si hay snapshot guardado
+            if (nodesMoveSnapshot.length > 0) {
+                actionFinalizeMultipleNodesMove(nodesMoveSnapshot as any);
+            }
+            
             selectedNodesIds().forEach(nodeID => {
                 finalizeNodePosition(nodeID);
             });
         }
 
         setDraggedNodeId(null);
+        nodesMoveSnapshot = [];
     };
 
     setViewMouseHandlers({
@@ -342,9 +408,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
     onMount(async () => {
         
-    
-        if(!socket)
-        initSocket();
+        wsService.initSocket();
 
         try {
 
@@ -366,126 +430,115 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             }, {passive: false});
 
             
+            const CK = nodusCanvas.getCK();
+            const canvas = nodusCanvas.getCanvas();
+
             function draw() {
-
-                const CK = nodusCanvas.getCK();
-                const canvas = nodusCanvas.getCanvas();
-
+                
+                // Actualizar viewport bounds cada 16ms o cuando cambia la cámara
+                if (Date.now() - lastViewportUpdate > 16) {
+                    updateViewportBounds();
+                }
+                
+                // Cache de nodos visibles para evitar filtrados repetitivos
+                const visibleNodes = nodes.filter(node => isNodeVisible(node));
+                const lockedNodes = visibleNodes.filter(node => node.lock);
+                const unlockedNodes = visibleNodes.filter(node => !node.lock);
+                
+                // Grid solo cuando hay un nodo arrastrado
                 if(draggedNodeId()){
-                    const node = draggedNode();
-                    if(node){
-                        const screenX = (node.x + node.width / 2)
-                        const screenY = (node.y + node.height / 2)
-                        drawGrid({x: screenX, y: screenY});
+                    const dragged = draggedNode();
+                    if(dragged && isNodeVisible(dragged)){
+                        drawGrid({x: dragged.x + dragged.width / 2, y: dragged.y + dragged.height / 2});
                     }
                 }
-
-                nodes.forEach(node => {
-
-                    if(node.lock){
-
-                        if(node.targetX !== undefined){
-                            const easing = 0.15;
-                            const newX = node.x + (node.targetX! - node.x) * easing;
-                            const newY = node.y + (node.targetY! - node.y) * easing;
-
-                            setNodes(n => n.id === node.id, {x : newX, y : newY});
-
-                            if(Math.abs(node.x - node.targetX) < 0.1){
-                                setNodes(n => n.id === node.id, { x: node.targetX, y: node.targetY});
-                                setNodes(n => n.id === node.id, { targetX: undefined, targetY: undefined});
-                            }
-                        }
-
-                        drawNode(CK, canvas, node);
-                        drawNodeText(CK, canvas, node, nodusCanvas.getFont());
-                    }
+                
+                // Dibujar nodos bloqueados (visibles)
+                lockedNodes.forEach(node => {
+                    drawNode(CK, canvas, node);
+                    drawNodeText(CK, canvas, node, nodusCanvas.getFont());
                 });
-
+                
+                // Dibujar conexiones solo entre nodos visibles
                 connections.forEach(conn => {
-
                     const fromNode = nodes.find(n => n.id === conn.from);
                     const toNode = nodes.find(n => n.id === conn.to);
                     
-                    if (fromNode && !fromNode.lock && toNode && !toNode.lock) {
+                    if (fromNode && !fromNode.lock && toNode && !toNode.lock && 
+                        (isNodeVisible(fromNode) || isNodeVisible(toNode))) {
                         drawConnection(CK, canvas, fromNode, toNode, conn);
                     }
-
                 });
 
                 if(isConnecting && connectionSourceId){
                     const fromNode = nodes.find(n => n.id === connectionSourceId);
                     if(fromNode){
-                        const startPoint = connectionSourcePoint ? { x: connectionSourcePoint.x, y: connectionSourcePoint.y } : undefined;
+                        const startPoint = connectionSourcePoint || {
+                            x: fromNode.x + fromNode.width / 2,
+                            y: fromNode.y + fromNode.height / 2
+                        };
+
                         drawElasticLine(CK, canvas, fromNode, mousePos, startPoint);
                     }
                 }
-
-                nodes.forEach(node => {
-
-                    if(!node.lock){
-
-                        if(node.targetX !== undefined){
-                            const easing = 0.15;
-                            const newX = node.x + (node.targetX! - node.x) * easing;
-                            const newY = node.y + (node.targetY! - node.y) * easing;
-
-                            setNodes(n => n.id === node.id, {x : newX, y : newY});
-
-                            if(Math.abs(node.x - node.targetX) < 0.1){
-                                setNodes(n => n.id === node.id, { targetX: undefined, targetY: undefined});
-                            }
-                        }
-
-                        drawNode(CK, canvas, node);
-                        drawNodeText(CK, canvas, node, nodusCanvas.getFont());
-                    }
+                
+                // Dibujar nodos no bloqueados (visibles)
+                unlockedNodes.forEach(node => {
+                    drawNode(CK, canvas, node);
+                    drawNodeText(CK, canvas, node, nodusCanvas.getFont());
                 });
-
+                
+                // Grid solo para nodo seleccionado único y visible
                 if(selectedNodesIds().length === 1){
                     const node = selectedNodes()[0];
-                    drawNodeGrid(CK, canvas, node);
+                    if(node && isNodeVisible(node)){
+                        drawNodeGrid(CK, canvas, node);
+                    }
                 }
 
+                // Resto del código igual...
                 if(connectionPoint){
                     drawConnectionPoint(CK, canvas, {
                         x: connectionPoint.x,
                         y: connectionPoint.y
                     });
                 }
-
+                
                 if(connectionSourcePoint){
                     drawConnectionPoint(CK, canvas, { x: connectionSourcePoint.x, y: connectionSourcePoint.y }, "#33a1ff");
                 }
-
+                
                 setResizingDots([]);
                 if(selectedNodesIds().length > 0){
                     drawResizingBox(CK, canvas, selectedNodes())
                 }
-
+                
                 if(isSelecting){
                     drawSelectionRect();
                 }
-
+                
                 drawPings();
-
+                
                 activeUsers.forEach(user => {
                     if(user.nombre == userData.name) return;
-
+                    
                     if(user.targetX !== undefined){
                         setActiveUsers(u => u.nombre === user.nombre, {x: lerp(user.x, user.targetX, 0.15)});
                     }
-
+                    
                     if(user.targetY !== undefined){
                         setActiveUsers(u => u.nombre === user.nombre, {y: lerp(user.y, user.targetY, 0.15)});
                     }
-
-                    drawExternalCursor(user.x, user.y, user.color, user.nombre);
+                    
+                    // Solo dibujar cursores de usuarios dentro del viewport
+                    if (user.x >= viewportBounds.x && user.x <= viewportBounds.x + viewportBounds.width &&
+                        user.y >= viewportBounds.y && user.y <= viewportBounds.y + viewportBounds.height) {
+                        drawExternalCursor(user.x, user.y, user.color, user.nombre);
+                    }
                 });
-
+                
                 flowConecctions += 0.015;
                 if(flowConecctions > 1) flowConecctions = 0;
-                
             }
             nodusCanvas.setDraw(draw);
         
@@ -496,8 +549,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
     onCleanup(() => {
 
-        socket?.close();
-        closeSocket();
+        wsService.closeSocket();
         setSelectedNodesIds([]);
         setDraggedNodeId(null);
         setNodes([]);
@@ -539,7 +591,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         const shareData : ShareData = {
             title: `Nodus Flow - ${userData.currentProjectName}`,
             text: `Join my design team at Nodus Flow!!\nRoom: ${userData.currentProjectName}\nID: ${userData.roomId}`,
-            url: `https://render-yqtz.onrender.com/views/share.html?d=${userData.roomId}`, // O el link específico si tienes routing
+            url: `https://render-yqtz.onrender.com/share_diagram?d=${userData.roomId}`,
         };
 
         try {
@@ -563,10 +615,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        sendEvent({
+        if(wsService.isReady())
+        wsService.sendEvent({
             "tipo": "seleccionar_nodo",
             "id": id?.id || null
-        });
+        }, false);
     });
     
     createEffect(() => {
@@ -618,6 +671,15 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             document.getElementById("search")?.focus();
             setActiveIndex(0);
         }
+    });
+
+    createEffect(() => {
+        // Escuchar cambios en cámara
+        nodusCanvas.camera.zoom();
+        nodusCanvas.camera.offsetX();
+        nodusCanvas.camera.offsetY();
+        updateViewportBounds();
+        nodusCanvas.requestRedraw();
     });
 
     return (

@@ -1,7 +1,6 @@
 import { createStore } from "solid-js/store";
 import { snapToGrid } from "../utils/math";
 import { createEffect, createMemo, createSignal } from "solid-js";
-import { sendEvent } from "../core/socket";
 import { connections, connectionsByNode, selectedConnectionId, setConnections, setSelectedConnectionId } from "./connections";
 import { nodusCanvas } from "../core/NodusCanvas";
 import {  setIsCommandPaletteOpen } from "../views/Editor/Editor";
@@ -9,7 +8,7 @@ import { activeUsers } from "./users";
 import { userData } from "./userStore";
 import { showToast, ToastType } from "./toast";
 import { calculateDiagramBounds } from "../utils/path";
-import { pushAction } from "../core/history";
+import { wsService } from "../core/socket";
 
 export interface Node {
     id: string,
@@ -91,7 +90,7 @@ export const ocupar = (id:string | null) => {
     return true;
 }
 
-export const addNode = (x: number, y : number, addToHistory?: boolean, name? : string) => {
+export const addNode = (x: number, y : number, name? : string) => {
 
     const newID = Math.random().toString(36).substring(6).toUpperCase();
 
@@ -114,7 +113,7 @@ export const addNode = (x: number, y : number, addToHistory?: boolean, name? : s
 
     console.log("Nodo agregado:", newNode);
 
-    sendEvent({
+    wsService.sendEvent({
         tipo: "nuevo_nodo",
         nodo: {
             id: newID,
@@ -132,30 +131,7 @@ export const addNode = (x: number, y : number, addToHistory?: boolean, name? : s
         }
     });
 
-    if(addToHistory){
-        pushAction({
-            label: "Crear nodo",
-            undo: () => {
-                deleteNode(newID);
-            },
-            redo: () => {
-                addRemoteNode(
-                    newID,
-                    x,
-                    y,
-                    160,
-                    80,
-                    name || "",
-                    "#21a2a6",
-                    1,
-                    8,
-                    false,
-                    1,
-                    {}
-                );
-            }
-        });
-    }
+    return newNode;
     
 };
 
@@ -183,7 +159,7 @@ export const copyNode = (id: string) => {
 
         setNodes([...nodes, newNode]);
 
-        sendEvent({
+        wsService.sendEvent({
             tipo: "nuevo_nodo",
             nodo: {
                 id: newID,
@@ -201,38 +177,25 @@ export const copyNode = (id: string) => {
             }
         });
 
-        // history
-        pushAction({
-            label: `Copy node '${currentNode.title || id}' to '${newID}'`,
-            undo: () => {
-                setNodes(nodes.filter(n => n.id !== newID));
-                sendEvent({ tipo: "eliminar_nodo", id: newID });
-            },
-            redo: () => {
-                setNodes([...nodes, newNode]);
-                sendEvent({
-                    tipo: "nuevo_nodo",
-                    nodo: {
-                        id: newID,
-                        w: newNode.width,
-                        h: newNode.height,
-                        x: newNode.x,
-                        y: newNode.y,
-                        texto: newNode.title || "",
-                        color: newNode.color,
-                        opacidad: newNode.opacity,
-                        radius: newNode.radius,
-                        pin: newNode.lock,
-                        style: newNode.style,
-                        properties: newNode.properties
-                    }
-                });
-            }
-        });
     }
 }
 
-export const addRemoteNode = (id: string, x : number, y : number, w : number, h : number, text : string, color : string, opacidad: number, radius: number, lock: boolean, style: number, properties: any) => {
+export const addRemoteNode = (
+    id: string,
+    x : number, 
+    y : number, 
+    w : number, 
+    h : number, 
+    text : string, 
+    color : string, 
+    opacidad: number, 
+    radius: number, 
+    lock: boolean, 
+    style: number, 
+    properties: any
+) => {
+
+    if([...nodes].some(n => n.id === id)) return;
 
     const newNode : Node = {
         id: id,
@@ -279,8 +242,6 @@ export const finalizeNodePosition = (id: string) => {
     const node = nodes.find(n => n.id === id);
 
     if(node){
-        const prevX = node.x;
-        const prevY = node.y;
         const newX = snapToGrid(node.x);
         const newY = snapToGrid(node.y);
 
@@ -293,7 +254,7 @@ export const finalizeNodePosition = (id: string) => {
             })
         );
 
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'mover_nodos',
             nodos: [{
                 id: id,
@@ -302,25 +263,10 @@ export const finalizeNodePosition = (id: string) => {
             }]
         });
 
-        // history
-        pushAction({
-            label: `Move '${node.title || id}' from (${prevX.toFixed(0)},${prevY.toFixed(0)}) to (${newX.toFixed(0)},${newY.toFixed(0)})`,
-            undo: () => {
-                setNodes(n => n.id === id, (n) => ({ ...n, x: prevX, y: prevY }));
-                sendEvent({ tipo: 'mover_nodos', nodos: [{ id: id, x: prevX, y: prevY }] });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, (n) => ({ ...n, x: newX, y: newY }));
-                sendEvent({ tipo: 'mover_nodos', nodos: [{ id: id, x: newX, y: newY }] });
-            }
-        });
     }
 }
 
 export const finalizeNodeSize = (id: string) => {
-    const node = nodes.find(n => n.id === id);
-    const prevW = node?.width;
-    const prevH = node?.height;
 
     setNodes(
         (n) => n.id === id,
@@ -334,7 +280,7 @@ export const finalizeNodeSize = (id: string) => {
     const newNode = nodes.find(n => n.id === id);
 
     if(newNode){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'redimensionar_nodo',
             id: id,
             w: newNode.width,
@@ -343,22 +289,6 @@ export const finalizeNodeSize = (id: string) => {
             y: newNode.y
         });
 
-        // history
-        pushAction({
-            label: `Resize '${newNode.title || id}' from ${prevW}x${prevH} to ${newNode.width}x${newNode.height}`,
-            undo: () => {
-                if(prevW !== undefined && prevH !== undefined){
-                    setNodes(n => n.id === id, (n) => ({ ...n, width: prevW, height: prevH }));
-                    const nodeRestored = nodes.find(n => n.id === id);
-                    if(nodeRestored) sendEvent({ tipo: 'redimensionar_nodo', id: id, w: prevW, h: prevH, x: nodeRestored.x, y: nodeRestored.y });
-                }
-            },
-            redo: () => {
-                setNodes(n => n.id === id, (n) => ({ ...n, width: newNode.width, height: newNode.height }));
-                const nodeNow = nodes.find(n => n.id === id);
-                if(nodeNow) sendEvent({ tipo: 'redimensionar_nodo', id: id, w: nodeNow.width, h: nodeNow.height, x: nodeNow.x, y: nodeNow.y });
-            }
-        });
     }
 }
 
@@ -376,7 +306,7 @@ export const moveToFront = (id: string, send = true) => {
     });
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'traer_al_frente',
             id: id
         });
@@ -396,7 +326,7 @@ export const moveToBack = (id: string, send = true) => {
     });
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'enviar_al_fondo',
             id: id
         });
@@ -415,8 +345,6 @@ export const updateNodeSize = (id: string, newWidth: number, newHeight: number) 
 }
 
 export const updateNodeColor = (id: string, newColor: string, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const prev = node?.color || '#257c92';
 
     setNodes(
         (n) => n.id === id,
@@ -427,29 +355,15 @@ export const updateNodeColor = (id: string, newColor: string, send = true) => {
     );
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'cambiar_color_nodo',
             color: newColor,
             id: id
-        });
-
-        pushAction({
-            label: `Set color '${newColor}' on '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, (n) => ({ ...n, color: prev }));
-                sendEvent({ tipo: 'cambiar_color_nodo', color: prev || '#000000', id: id });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, (n) => ({ ...n, color: newColor }));
-                sendEvent({ tipo: 'cambiar_color_nodo', color: newColor, id: id });
-            }
         });
     }
 }
 
 export const updateNodoTitle = (id: string, newTitle: string, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const prev = node?.title || '';
 
     setNodes(
         (n) => n.id === id,
@@ -457,29 +371,16 @@ export const updateNodoTitle = (id: string, newTitle: string, send = true) => {
     );
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'cambiar_texto_nodo',
             texto: newTitle,
             id: id
         });
 
-        pushAction({
-            label: `Set title '${newTitle}' on '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, "title", prev);
-                sendEvent({ tipo: 'cambiar_texto_nodo', texto: prev || '', id: id });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, "title", newTitle);
-                sendEvent({ tipo: 'cambiar_texto_nodo', texto: newTitle, id: id });
-            }
-        });
     }
 };
 
 export const deleteNode = (id: string, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const relatedConns = connections.filter(conn => conn.from === id || conn.to === id);
 
     setNodes(nodes.filter(n => n.id !== id));
 
@@ -488,56 +389,11 @@ export const deleteNode = (id: string, send = true) => {
     );
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "eliminar_nodo",
             id: id
         });
 
-        // history: restore node + its connections
-        pushAction({
-            label: `Delete node '${node?.title || id}'`,
-            undo: () => {
-                if(node){
-                    setNodes([...nodes, node]);
-                    sendEvent({
-                        tipo: "nuevo_nodo",
-                        nodo: {
-                            id: node.id,
-                            w: node.width,
-                            h: node.height,
-                            x: node.x,
-                            y: node.y,
-                            texto: node.title || "",
-                            color: node.color,
-                            opacidad: node.opacity,
-                            radius: node.radius,
-                            pin: node.lock,
-                            style: node.style,
-                            properties: node.properties
-                        }
-                    });
-                }
-
-                relatedConns.forEach(c => {
-                    setConnections([...connections, c]);
-                    sendEvent({
-                        tipo: 'crear_conexion',
-                        conexion: {
-                            id: c.id,
-                            style: c.tipo,
-                            origenId: c.from,
-                            destinoId: c.to,
-                            properties: c.properties
-                        }
-                    });
-                });
-            },
-            redo: () => {
-                setNodes(nodes.filter(n => n.id !== id));
-                setConnections(connections.filter(conn => conn.from != id && conn.to != id));
-                sendEvent({ tipo: "eliminar_nodo", id: id });
-            }
-        });
     }
 }
 
@@ -546,55 +402,28 @@ export const updateNodeRemote = (id: string, tx: number, ty: number) => {
 };
 
 export const updateNodeOpacity = (id:string, newOpacity: number, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const prev = node?.opacity || 1;
 
     setNodes(n => n.id === id, "opacity", newOpacity);
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "cambiar_opacidad_nodo",
             id: id,
             opacidad: newOpacity
         });
 
-        pushAction({
-            label: `Set opacity ${newOpacity} on '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, "opacity", prev);
-                sendEvent({ tipo: "cambiar_opacidad_nodo", id: id, opacidad: prev });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, "opacity", newOpacity);
-                sendEvent({ tipo: "cambiar_opacidad_nodo", id: id, opacidad: newOpacity });
-            }
-        });
     }
 }
 
 export const updateNodeRadius = (id:string, newRadius: number, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const prev = node?.radius || 0;
 
     setNodes(n => n.id === id, "radius", newRadius);
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "cambiar_radius_nodo",
             id: id,
             radius: newRadius
-        });
-
-        pushAction({
-            label: `Set radius ${newRadius} on '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, "radius", prev);
-                sendEvent({ tipo: "cambiar_radius_nodo", id: id, radius: prev });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, "radius", newRadius);
-                sendEvent({ tipo: "cambiar_radius_nodo", id: id, radius: newRadius });
-            }
         });
     }
 }
@@ -628,26 +457,13 @@ export const updateHeightFromText = (id: string) => {
 }
 
 export const lockNode = (id: string, send = true) => {
-    const node = nodes.find(n => n.id === id);
 
     setNodes(n => n.id === id, "lock", true);
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'bloquear_nodo',
             id: id
-        });
-
-        pushAction({
-            label: `Lock '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, "lock", false);
-                sendEvent({ tipo: 'desbloquear_nodo', id: id });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, "lock", true);
-                sendEvent({ tipo: 'bloquear_nodo', id: id });
-            }
         });
     }
 
@@ -655,55 +471,28 @@ export const lockNode = (id: string, send = true) => {
 }
 
 export const unLockNode = (id: string, send = true) => {
-    const node = nodes.find(n => n.id === id);
 
     setNodes(n => n.id === id, "lock", false);
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: 'desbloquear_nodo',
             id: id
         });
 
-        pushAction({
-            label: `Unlock '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, "lock", true);
-                sendEvent({ tipo: 'bloquear_nodo', id: id });
-            },
-            redo: () => {
-                setNodes(n => n.id === id, "lock", false);
-                sendEvent({ tipo: 'desbloquear_nodo', id: id });
-            }
-        });
     }
 }
 
 export const changeNodeStyle = (id: string, newStyle: number) => {
-    const node = nodes.find(n => n.id === id);
-    const prev = node?.style;
 
     setNodes(n => n.id === id, "style", newStyle);
 
-    sendEvent({
+    wsService.sendEvent({
         tipo: 'cambiar_estilo_nodo',
         id: id,
         estilo: newStyle
     });
 
-    pushAction({
-        label: `Change style of '${node?.title || id}' to ${newStyle}`,
-        undo: () => {
-            if(prev !== undefined){
-                setNodes(n => n.id === id, "style", prev);
-                sendEvent({ tipo: 'cambiar_estilo_nodo', id: id, estilo: prev });
-            }
-        },
-        redo: () => {
-            setNodes(n => n.id === id, "style", newStyle);
-            sendEvent({ tipo: 'cambiar_estilo_nodo', id: id, estilo: newStyle });
-        }
-    });
 }
 
 export const jumpToNode = (node?: Node) => {
@@ -777,8 +566,6 @@ export const bulkToBack = () => {
 }
 
 export const addNodeProperty = (id: string, propertyName: string, propertyValue: any, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const prevValue = node?.properties ? node.properties[propertyName] : undefined;
 
     setNodes(n => n.id === id, (n) => ({
         ...n,
@@ -789,48 +576,18 @@ export const addNodeProperty = (id: string, propertyName: string, propertyValue:
     }));
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "cambiar_nodo_property",
             id: id,
             propertyName: propertyName,
             propertyValue: propertyValue
         });
 
-        // push undo/redo action
-        pushAction({
-            label: `Set '${propertyName}'='${String(propertyValue)}' on '${node?.title || id}'`,
-            undo: () => {
-                setNodes(n => n.id === id, (n) => {
-                    const newProperties = {...n.properties};
-                    if(prevValue === undefined) delete newProperties[propertyName];
-                    else newProperties[propertyName] = prevValue;
-                    return {
-                        ...n,
-                        properties: newProperties
-                    };
-                });
-
-                if(prevValue === undefined){
-                    sendEvent({ tipo: "deletear_nodo_property", id: id, propertyName: propertyName });
-                } else {
-                    sendEvent({ tipo: "cambiar_nodo_property", id: id, propertyName: propertyName, propertyValue: prevValue });
-                }
-            },
-            redo: () => {
-                setNodes(n => n.id === id, (n) => ({
-                    ...n,
-                    properties: { ...n.properties, [propertyName]: propertyValue }
-                }));
-
-                sendEvent({ tipo: "cambiar_nodo_property", id: id, propertyName: propertyName, propertyValue: propertyValue });
-            }
-        });
     }
 }
 
 export const deleteNodeProperty = (id: string, propertyName: string, send = true) => {
-    const node = nodes.find(n => n.id === id);
-    const prevValue = node?.properties ? node.properties[propertyName] : undefined;
+
     setNodes(n => n.id === id, (n) => {
         const newProperties = {...n.properties};
         delete newProperties[propertyName];
@@ -841,38 +598,11 @@ export const deleteNodeProperty = (id: string, propertyName: string, send = true
     });
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "deletear_nodo_property",
             id: id,
             propertyName: propertyName
         });
 
-        // push undo/redo action
-        pushAction({
-            label: `Delete '${propertyName}' from '${node?.title || id}' (was: '${String(prevValue)}')`,
-            undo: () => {
-                // restore previous value
-                if(prevValue !== undefined){
-                    setNodes(n => n.id === id, (n) => ({
-                        ...n,
-                        properties: { ...n.properties, [propertyName]: prevValue }
-                    }));
-
-                    sendEvent({ tipo: "cambiar_nodo_property", id: id, propertyName: propertyName, propertyValue: prevValue });
-                }
-            },
-            redo: () => {
-                setNodes(n => n.id === id, (n) => {
-                    const newProperties = {...n.properties};
-                    delete newProperties[propertyName];
-                    return {
-                        ...n,
-                        properties: newProperties
-                    };
-                });
-
-                sendEvent({ tipo: "deletear_nodo_property", id: id, propertyName: propertyName });
-            }
-        });
     }
 }       

@@ -1,8 +1,8 @@
 import { createStore } from "solid-js/store"
-import { sendEvent } from "../core/socket";
 import { userData } from "./userStore";
 import { nodusCanvas } from "../core/NodusCanvas";
 import { showToast, ToastType } from "./toast";
+import { wsService } from "../core/socket";
 
 export interface Ping {
     id: string,
@@ -45,7 +45,7 @@ export const addPing = (x:number, y: number, color: string, name: string, send =
     }, 1500);
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "ping_atencion",
             x: x,
             y: y,

@@ -1,27 +1,29 @@
 import { CanvasKit } from "canvaskit-wasm";
 import { Node } from "../models/nodes";
 import { Connection } from "../models/connections";
+import { ANCHOR_POINT } from "../views/Editor/Editor";
 
 const MARGIN = 50;
 const PADDING = 5;
 
-enum CONTROL_POINT {
-    TOP = "TOP",
-    BOTTOM = "BOTTOM",
-    LEFT = "LEFT",
-    RIGHT = "RIGHT"
-}
-
-const getPoint = (controlPoint: CONTROL_POINT, node: Node) => {
+const getPoint = (controlPoint: ANCHOR_POINT, node: Node) => {
     switch(controlPoint) {
-        case CONTROL_POINT.TOP:
+        case ANCHOR_POINT.TOP:
             return { x: node.x + node.width / 2, y: node.y - PADDING};
-        case CONTROL_POINT.BOTTOM:
+        case ANCHOR_POINT.BOTTOM:
             return { x: node.x + node.width / 2, y: node.y + node.height + PADDING};
-        case CONTROL_POINT.LEFT:
+        case ANCHOR_POINT.LEFT:
             return { x: node.x - PADDING, y: node.y + node.height / 2 };
-        case CONTROL_POINT.RIGHT:
+        case ANCHOR_POINT.RIGHT:
             return { x: node.x + node.width + PADDING, y: node.y + node.height / 2 };
+        case ANCHOR_POINT.TOP_LEFT:
+            return { x: node.x - PADDING, y: node.y - PADDING };
+        case ANCHOR_POINT.TOP_RIGHT:
+            return { x: node.x + node.width + PADDING, y: node.y - PADDING };
+        case ANCHOR_POINT.BOTTOM_LEFT:
+            return { x: node.x - PADDING, y: node.y + node.height + PADDING };
+        case ANCHOR_POINT.BOTTOM_RIGHT:
+            return { x: node.x + node.width + PADDING, y: node.y + node.height + PADDING };
     }
 };
 
@@ -39,30 +41,38 @@ function getBestSide(node: Node, targetCenter: {x: number, y: number}) {
 
     // Productos escalares con las normales exteriores (derecha, izquierda, abajo, arriba)
     const dots = [
-        { side: CONTROL_POINT.RIGHT,  dot:  dx },               // (1, 0)
-        { side: CONTROL_POINT.LEFT,   dot: -dx },               // (-1,0)
-        { side: CONTROL_POINT.BOTTOM, dot:  dy },               // (0, 1)
-        { side: CONTROL_POINT.TOP,    dot: -dy }                // (0,-1)
+        { side: ANCHOR_POINT.RIGHT,  dot:  dx },               // (1, 0)
+        { side: ANCHOR_POINT.LEFT,   dot: -dx },               // (-1,0)
+        { side: ANCHOR_POINT.BOTTOM, dot:  dy },               // (0, 1)
+        { side: ANCHOR_POINT.TOP,    dot: -dy }                // (0,-1)
     ];
     return dots.reduce((best, cur) => cur.dot > best.dot ? cur : best).side;
 }
 
 function getLocalSide(local?: string){
     switch(local){
-        case "TOP": return CONTROL_POINT.TOP;
-        case "BOTTOM": return CONTROL_POINT.BOTTOM;
-        case "LEFT": return CONTROL_POINT.LEFT;
-        case "RIGHT": return CONTROL_POINT.RIGHT;
+        case "TOP": return ANCHOR_POINT.TOP;
+        case "BOTTOM": return ANCHOR_POINT.BOTTOM;
+        case "LEFT": return ANCHOR_POINT.LEFT;
+        case "RIGHT": return ANCHOR_POINT.RIGHT;
+        case "TOP_LEFT": return ANCHOR_POINT.TOP_LEFT;
+        case "TOP_RIGHT": return ANCHOR_POINT.TOP_RIGHT;
+        case "BOTTOM_LEFT": return ANCHOR_POINT.BOTTOM_LEFT;
+        case "BOTTOM_RIGHT": return ANCHOR_POINT.BOTTOM_RIGHT;
         default: return null;
     }
 }
 
-function getOutDirection(side: CONTROL_POINT) {
+function getOutDirection(side: ANCHOR_POINT) {
     switch(side) {
-        case CONTROL_POINT.RIGHT:  return { x: 1, y: 0 };
-        case CONTROL_POINT.LEFT:   return { x: -1, y: 0 };
-        case CONTROL_POINT.BOTTOM: return { x: 0, y: 1 };
-        case CONTROL_POINT.TOP:    return { x: 0, y: -1 };
+        case ANCHOR_POINT.RIGHT:        return { x: 1, y: 0 };
+        case ANCHOR_POINT.LEFT:         return { x: -1, y: 0 };
+        case ANCHOR_POINT.BOTTOM:       return { x: 0, y: 1 };
+        case ANCHOR_POINT.TOP:          return { x: 0, y: -1 };
+        case ANCHOR_POINT.TOP_LEFT:     return { x: -1, y: -1};
+        case ANCHOR_POINT.TOP_RIGHT:    return { x: 1, y: -1};
+        case ANCHOR_POINT.BOTTOM_LEFT:  return { x: -1, y: 1};
+        case ANCHOR_POINT.BOTTOM_RIGHT: return { x: 1, y: 1};
     }
 }
 

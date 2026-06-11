@@ -112,6 +112,17 @@ export const createCameraStore = () => {
         return {width, height};
     }
 
+    const getViewportBounds = () => {
+        const wordlSize = getWordlSize();
+
+        return {
+            x: offsetX(),
+            y: offsetY(),
+            width: wordlSize.width,
+            height: wordlSize.height
+        }
+    }
+
     return {
         offsetX, offsetY, zoom,
         setOffsetX, setOffsetY, setZoom,
@@ -127,6 +138,7 @@ export const createCameraStore = () => {
         animateTo,
         offsetToCenterPoint,
         centerCameraNow,
-        getWordlSize
+        getWordlSize,
+        getViewportBounds
     };
 }

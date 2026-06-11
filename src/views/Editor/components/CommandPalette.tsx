@@ -3,9 +3,8 @@ import { mouseDisabled, setIsCommandPaletteOpen  } from "../Editor";
 
 import searchIco from "../../../assets/search.svg";
 import { Accessor, createEffect, createMemo, createSignal, For } from "solid-js";
-import { bulkDelete, jumpToNode, lockNode, nodes, selectedNodesIds, setSelectedNodesIds, unLockNode } from "../../../models/nodes";
+import { jumpToNode, nodes } from "../../../models/nodes";
 import { exportDiagramAsPng } from "../../../core/renderer";
-import { connections, deleteConnection } from "../../../models/connections";
 import { exportAsJson } from "../../../models/userStore";
 import { nodusCanvas } from "../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../utils/path";
@@ -50,8 +49,8 @@ enum CommandID {
 
 const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) => void, color?: string, argPlaceholder?: string}> = {
     [CommandID.ExportPng]: {
-        label: 'Export: PNG',
-        action: (_?: string) => exportDiagramAsPng(),
+        label: 'Export PNG: Default Scale',
+        action: (arg?: string) => exportDiagramAsPng(arg),
         color: "#977e2c"
     },
     [CommandID.ExportJson]: {
@@ -67,37 +66,35 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         color: "#2c977e"
     },
     [CommandID.DelSelectedNodes]: {
-        label: 'Delete: ',
-        action: (arg?: string) => {
-            deleteFromQuery(arg);
+        label: 'Delete: Selected Nodes',
+        action: (_?: string) => {
+            deleteFromQuery("Selected Nodes");
         },
-        color: "#aa2f10",
-        argPlaceholder: "Selected Nodes"
-    },[CommandID.DelAllNodes]: {
-        label: 'Delete: ',
-        action: (arg?: string) => {
-            deleteFromQuery(arg);
+        color: "#aa2f10"
+    },
+    [CommandID.DelAllNodes]: {
+        label: 'Delete: All Nodes',
+        action: (_?: string) => {
+            deleteFromQuery("All Nodes");
         },
-        color: "#aa2f10",
-        argPlaceholder: "All Nodes"
+        color: "#aa2f10"
     },
     [CommandID.DelAllConnections]: {
-        label: 'Delete: ',
-        action: (arg?: string) => {
-            deleteFromQuery(arg);
+        label: 'Delete: All Connections',
+        action: (_?: string) => {
+            deleteFromQuery("All Connections");
         },
-        color: "#aa2f10",
-        argPlaceholder: "All Connections"
+        color: "#aa2f10"
     },
     [CommandID.DelAllDisconnected]: {
-        label: 'Delete: ',
-        action: (arg?: string) => {
-            deleteFromQuery(arg);
+        label: 'Delete: All Disconnected',
+        action: (_?: string) => {
+            deleteFromQuery("All Disconnected");
         },
-        color: "#aa2f10",
-        argPlaceholder: "All Disconnected"
-    },[CommandID.DelNode]: {
-        label: 'Delete: ',
+        color: "#aa2f10"
+    },
+    [CommandID.DelNode]: {
+        label: 'Delete: NodeName',
         action: (arg?: string) => {
             deleteFromQuery(arg);
         },
@@ -111,7 +108,6 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
             const diagramCenter = nodusCanvas.camera.getDiagramCenter();
             const zoom = Math.min(nodusCanvas.camera.zoomToFit(bounds.width, bounds.height), 1);
             const offset = nodusCanvas.camera.offsetToCenterPoint(diagramCenter.x, diagramCenter.y, zoom);
-
             nodusCanvas.camera.animateTo(offset.offsetX, offset.offsetY, zoom);
         },
         color: "#c1d3df"
@@ -119,41 +115,42 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
     [CommandID.ClearCanvas]: {
         label: 'Clear Canvas',
         action: (_?: string) => {
-            bulkDelete();
-            [...connections].forEach(conn => deleteConnection(conn.id));
+            deleteFromQuery("Clear Canvas");
         },
         color: "#9be28c"
     },
     [CommandID.LockAll]: {
         label: 'Lock All nodes',
         action: (_?: string) => {
-            [...nodes].forEach(node => lockNode(node.id));
+            import("../../../core/actions").then(({ actionLockAllNodes }) => actionLockAllNodes());
         },
         color: "#252421"
     },
     [CommandID.UnLockAll]: {
         label: 'Unlock All nodes',
         action: (_?: string) => {
-            [...nodes].forEach(node => unLockNode(node.id));
+            import("../../../core/actions").then(({ actionUnlockAllNodes }) => actionUnlockAllNodes());
         },
         color: "#1a610c"
     },
     [CommandID.Deseclect]: {
         label: 'Select: None',
-        action: (_?: string) => setSelectedNodesIds([]),
+        action: (_?: string) => {
+            import("../../../core/actions").then(({ actionSelectNone }) => actionSelectNone());
+        },
         color: "#7c7c7c38"
     },
     [CommandID.SelectAll]: {
         label: 'Select: All',
-        action: (_?: string) => setSelectedNodesIds([...nodes].map(it => it.id)),
+        action: (_?: string) => {
+            import("../../../core/actions").then(({ actionSelectAll }) => actionSelectAll());
+        },
         color: "#096894"
     },
     [CommandID.InverstSelect]: {
         label: 'Select: Invert',
         action: (_?: string) => {
-            const currentIds = selectedNodesIds();
-            const invertedIds = [...nodes].filter(n => !currentIds.includes(n.id)).map(it => it.id);
-            setSelectedNodesIds(invertedIds);
+            import("../../../core/actions").then(({ actionInvertSelection }) => actionInvertSelection());
         },
         color: "#c796c9"
     },
@@ -166,16 +163,16 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         argPlaceholder: "[NewNodeName]"
     },
     [CommandID.ConnectComplete]: {
-        label: "Connect: ",
-        action: (arg?:string) => {
-            connectGraph(arg);
+        label: "Connect: Complete",
+        action: (_?:string) => {
+            connectGraph("Complete");
         },
         argPlaceholder: "Complete"
     },
     [CommandID.ConnectCircuit]: {
-        label: "Connect: ",
-        action: (arg?:string) => {
-            connectGraph(arg);
+        label: "Connect: Circuit",
+        action: (_?:string) => {
+            // TODO: Implementar conexión en circuito
         },
         argPlaceholder: "Circuit"
     },
@@ -207,7 +204,6 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         },
         argPlaceholder: "fromNodeName toNodeName propertyName"
     }
-
 }
 
 export const filteredItems = createMemo(() => {

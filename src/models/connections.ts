@@ -1,6 +1,5 @@
 import { createStore } from "solid-js/store";
-import { sendEvent } from "../core/socket";
-import { pushAction } from "../core/history";
+import { wsService } from "../core/socket";
 import { createMemo, createSignal } from "solid-js";
 
 export interface Connection {
@@ -20,15 +19,12 @@ export const selectedConnection = createMemo(() => connections.find(c => c.id ==
 export const addConnection = (fromId: string, toId: string) => {
     if(fromId === toId) return;
 
-    const exist = connections.some(c => (c.from === fromId && c.to === toId));
-    if(exist) return;
-
     const newID = Math.random().toString(36).substring(6);
     const newConn: Connection = { from: fromId, to: toId, id: newID, tipo: 1, properties: {} };
 
     setConnections([...connections, newConn]);
 
-    sendEvent({
+    wsService.sendEvent({
         tipo: 'crear_conexion',
         conexion: {
             id: newID,
@@ -39,32 +35,12 @@ export const addConnection = (fromId: string, toId: string) => {
         }
     });
 
-    // history
-    pushAction({
-        label: `Connect '${fromId}' ↔ '${toId}'`,
-        undo: () => {
-            setConnections(conns => conns.filter(c => c.id !== newID));
-            sendEvent({ tipo: "eliminar_conexion", id: newID });
-        },
-        redo: () => {
-            setConnections(conns => [...conns, newConn]);
-            sendEvent({
-                tipo: 'crear_conexion',
-                conexion: {
-                    id: newID,
-                    style: 1,
-                    origenId: fromId,
-                    destinoId: toId,
-                    properties: {}
-                }
-            });
-        }
-    });
-
-    return newID;
+    return newConn;
 }
 
 export const createRemoteConnection = (id: string, origen: string, destino: string, style: number, properties: any) => {
+
+    if([...connections].some(c => c.id === id)) return;
 
     const newConn : Connection = {
         id: id,
@@ -78,67 +54,25 @@ export const createRemoteConnection = (id: string, origen: string, destino: stri
 }
 
 export const deleteConnection = (id: string, send = true) => {
-    const conn = connections.find(c => c.id === id);
 
     setConnections(connections.filter(conn => conn.id != id));
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "eliminar_conexion",
             id: id
-        });
-
-        // history
-        pushAction({
-            label: `Delete connection ${id}`,
-            undo: () => {
-                if(conn) {
-                    setConnections(conns => [...conns, conn!]);
-                    sendEvent({
-                        tipo: 'crear_conexion',
-                        conexion: {
-                            id: conn!.id,
-                            style: conn!.tipo,
-                            origenId: conn!.from,
-                            destinoId: conn!.to,
-                            properties: conn!.properties
-                        }
-                    });
-                }
-            },
-            redo: () => {
-                setConnections(conns => conns.filter(c => c.id !== id));
-                sendEvent({ tipo: "eliminar_conexion", id: id });
-            }
         });
     }
 }
 
 export const changeConnectionStyle = (id: string, newStyle: number) => {
-    const conn = connections.find(c => c.id === id);
-    const prevStyle = conn ? conn.tipo : undefined;
 
     setConnections(conn => conn.id === id, "tipo", newStyle);
 
-    sendEvent({
+    wsService.sendEvent({
         tipo: "cambiar_estilo_conexion",
         id: id,
         estilo: newStyle
-    });
-
-    // history
-    pushAction({
-        label: `Change connection ${id} style to ${newStyle}`,
-        undo: () => {
-            if(prevStyle !== undefined){
-                setConnections(c => c.id === id, "tipo", prevStyle);
-                sendEvent({ tipo: "cambiar_estilo_conexion", id: id, estilo: prevStyle });
-            }
-        },
-        redo: () => {
-            setConnections(c => c.id === id, "tipo", newStyle);
-            sendEvent({ tipo: "cambiar_estilo_conexion", id: id, estilo: newStyle });
-        }
     });
 
 }
@@ -152,46 +86,20 @@ export const areConnected = (nodeId1: string, nodeId2: string) => {
 }
 
 export const addConnectionProperty = (connId: string, propertyName: string, propertyValue: any, send = true) => {
-    const conn = connections.find(c => c.id === connId);
-    const prevValue = conn?.properties ? conn.properties[propertyName] : undefined;
 
     setConnections(conn => conn.id === connId, "properties", (props) => ({...props, [propertyName]: propertyValue}));
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "cambiar_conexion_property",
             id: connId,
             propertyName: propertyName,
             propertyValue: propertyValue
         });
-
-        pushAction({
-            label: `Set '${propertyName}'='${String(propertyValue)}' on connection ${connId}`,
-            undo: () => {
-                setConnections(c => c.id === connId, "properties", (props) => {
-                    const newProps = {...props};
-                    if(prevValue === undefined) delete newProps[propertyName];
-                    else newProps[propertyName] = prevValue;
-                    return newProps;
-                });
-
-                if(prevValue === undefined){
-                    sendEvent({ tipo: "deletear_conexion_property", id: connId, propertyName: propertyName });
-                } else {
-                    sendEvent({ tipo: "cambiar_conexion_property", id: connId, propertyName: propertyName, propertyValue: prevValue });
-                }
-            },
-            redo: () => {
-                setConnections(c => c.id === connId, "properties", (props) => ({...props, [propertyName]: propertyValue}));
-                sendEvent({ tipo: "cambiar_conexion_property", id: connId, propertyName: propertyName, propertyValue: propertyValue });
-            }
-        });
     }
 }
 
 export const deleteConnectionProperty = (connId: string, propertyName: string, send = true) => {
-    const conn = connections.find(c => c.id === connId);
-    const prevValue = conn?.properties ? conn.properties[propertyName] : undefined;
 
     setConnections(c => c.id === connId, (n) => {
         const newProperties = {...n.properties};
@@ -203,28 +111,10 @@ export const deleteConnectionProperty = (connId: string, propertyName: string, s
     });
 
     if(send){
-        sendEvent({
+        wsService.sendEvent({
             tipo: "deletear_conexion_property",
             id: connId,
             propertyName: propertyName
-        });
-
-        pushAction({
-            label: `Delete '${propertyName}' from connection ${connId} (was: '${String(prevValue)}')`,
-            undo: () => {
-                if(prevValue !== undefined){
-                    setConnections(c => c.id === connId, "properties", (props) => ({ ...props, [propertyName]: prevValue }));
-                    sendEvent({ tipo: "cambiar_conexion_property", id: connId, propertyName: propertyName, propertyValue: prevValue });
-                }
-            },
-            redo: () => {
-                setConnections(c => c.id === connId, "properties", (props) => {
-                    const newProps = {...props};
-                    delete newProps[propertyName];
-                    return newProps;
-                });
-                sendEvent({ tipo: "deletear_conexion_property", id: connId, propertyName: propertyName });
-            }
         });
     }
 }

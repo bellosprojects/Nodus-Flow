@@ -1,5 +1,3 @@
-import { addNode, bulkCopy, bulkDelete, bulkFitHeight, bulkLock, bulkToBack, bulkToFront, bulkUnLock, getNode, jumpToNode, lockNode, Node, nodes, ocupadoPor, selectedNodes, selectedNodesIds, setSelectedNodesIds, toolBeltPosition, unLockNode } from '../../../models/nodes';
-
 import myLogo from "../../../assets/NodusLogo.png";
 import selectIco from "../../../assets/select.svg";
 import fullScreenIco from "../../../assets/fullscreen.svg";
@@ -25,14 +23,49 @@ import downloadIco from "../../../assets/download.svg";
 
 import styles from "../Editor.module.css";
 
-import { updateCurrentProjectName, userData } from '../../../models/userStore';
 import { For, Match, Show, Switch } from 'solid-js';
 
-import { isCommandPaletteOpen, isConfigPanelOpen, isEditPanelOpen, isLayersPanelOpen, layerView, mouseOption, setIsCommandPaletteOpen, setIsConfigPanelOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setLayerView, setMouseOption } from '../Editor';
+import { 
+    isCommandPaletteOpen, 
+    isConfigPanelOpen, 
+    isEditPanelOpen, 
+    isLayersPanelOpen, 
+    layerView, 
+    mouseOption, 
+    setIsCommandPaletteOpen, 
+    setIsConfigPanelOpen, 
+    setIsEditPanelOpen, 
+    setIsLayersPanelOpen, 
+    setLayerView, setMouseOption 
+} from '../Editor';
+
 import { activeUsers } from '../../../models/users';
-import { changeConnectionStyle, Connection, connections, deleteConnection, selectedConnectionId, setSelectedConnectionId,  } from '../../../models/connections';
 import { exportDiagramAsPng } from '../../../core/renderer';
 import { nodusCanvas } from '../../../core/NodusCanvas';
+
+import { 
+    actionChangeConnectionStyle, 
+    actionCreateNode, 
+    actionDeleteConnection, 
+    actionToggleLockNodes, 
+    actionUpdateProjectName 
+} from '../../../core/actions';
+
+import { userData, updateCurrentProjectName } from "../../../models/userStore";
+
+import {
+    getNode, 
+    jumpToNode, 
+    Node, 
+    nodes, 
+    ocupadoPor, 
+    selectedNodes, 
+    selectedNodesIds, 
+    setSelectedNodesIds, 
+    toolBeltPosition 
+} from "../../../models/nodes";
+
+import { Connection, connections, selectedConnectionId, setSelectedConnectionId } from "../../../models/connections";
 
 export const HEADER = () => {
     return (
@@ -64,7 +97,7 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
 
             <div class="square" onClick={() => {
                 const point = nodusCanvas.camera.getWorldCenter();
-                addNode(point.x - 80, point.y - 40, true);
+                actionCreateNode(point.x - 80, point.y - 40);
             }}></div>
 
             <img src={selectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'select' ? styles.selected : ""}`} onClick={(_) => setMouseOption('select')}/>
@@ -108,7 +141,7 @@ export const TOP_BUTTONS = (onShare: () => void) => {
     return (
         <div class={styles.topButtons}>
             <img src={shareIco} alt="" onClick={onShare}/>
-            <img src={downloadIco} alt="" onClick={exportDiagramAsPng}/>
+            <img src={downloadIco} alt="" onClick={(_) => exportDiagramAsPng(1)}/>
         </div>
     )
 }
@@ -117,7 +150,7 @@ export const PROJECT_NAME = () => {
     return (
         <div class={styles.projectName}>
             <p>Project Name: </p>
-            <input placeholder='Enter project name...' type="text" value={userData.currentProjectName} onInput={(e) => updateCurrentProjectName(e.currentTarget.value)}/>
+            <input placeholder='Enter project name...' type="text" value={userData.currentProjectName} onInput={(e) => updateCurrentProjectName(e.currentTarget.value)} onBlur={(_) => actionUpdateProjectName(userData.oldProjectName, userData.currentProjectName)}/>
         </div>
     )
 }
@@ -129,29 +162,55 @@ export const ROOM_ID = () => {
 }
 
 export const TOOL_BELT = () => {
-    return  (
-        <Show 
-            when={selectedNodes().length > 0}>
+    // Importar las acciones necesarias
+    const handleBulkFitHeight = () => {
+        import("../../../core/actions").then(({ actionBulkFitHeight }) => actionBulkFitHeight());
+    };
+    
+    const handleBulkCopy = () => {
+        import("../../../core/actions").then(({ actionBulkCopy }) => actionBulkCopy());
+    };
+    
+    const handleBulkToFront = () => {
+        import("../../../core/actions").then(({ actionBulkToFront }) => actionBulkToFront());
+    };
+    
+    const handleBulkToBack = () => {
+        import("../../../core/actions").then(({ actionBulkToBack }) => actionBulkToBack());
+    };
+    
+    const handleDeleteSelected = () => {
+        import("../../../core/actions").then(({ actionDeleteSelectedNodes }) => actionDeleteSelectedNodes());
+    };
+    
+    const handleToggleLock = () => {
+        import("../../../core/actions").then(({ actionToggleLockNodes }) => {
+            actionToggleLockNodes(selectedNodesIds(), !selectedNodes().every(n => n.lock));
+        });
+    };
+
+    return (
+        <Show when={selectedNodes().length > 0}>
             <div class={styles.toolBelt}
                 style={{left: `${toolBeltPosition()?.x}px`,
                 top: `${toolBeltPosition()?.y}px`}}>
                 <div class={styles.toolBeltButton} data-tooltip="Fit height">
-                    <img src={textIco} alt="" onClick={(_) => bulkFitHeight()}/>
+                    <img src={textIco} alt="" onClick={handleBulkFitHeight}/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Copy">
-                    <img src={copyIco} alt="" onClick={(_) => bulkCopy()}/>
+                    <img src={copyIco} alt="" onClick={handleBulkCopy}/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip={selectedNodes().some(node => node.lock) ? "Unlock" : "Lock"}>
-                    <img src={selectedNodes().some(node => node.lock)? lockIco : unLockIco} alt="" onClick={(_) => selectedNodes().some(node => node.lock)? bulkUnLock() : bulkLock() }/>
+                    <img src={selectedNodes().some(node => node.lock)? lockIco : unLockIco} alt="" onClick={handleToggleLock}/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Bring to front">
-                    <img src={frontIco} alt="" onClick={(_) => bulkToFront() }/>
+                    <img src={frontIco} alt="" onClick={handleBulkToFront}/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Send to back">
-                    <img src={backIco} alt="" onClick={(_) => bulkToBack() }/>
+                    <img src={backIco} alt="" onClick={handleBulkToBack}/>
                 </div>
                 <div class={styles.toolBeltButton} data-tooltip="Delete">
-                    <img src={deleteIco} alt="" onClick={(_) => bulkDelete()}/>
+                    <img src={deleteIco} alt="" onClick={handleDeleteSelected}/>
                 </div>
             </div>
         </Show>
@@ -198,7 +257,7 @@ const NODE_FRAME = (node: Node) => {
         <div class={`${styles.layerItem} ${selectedNodesIds().includes(node.id)? styles.selected: ""} `}
             onClick={(_) => jumpToNode(node)}
             >
-                <img src={node.lock? lockIco : unLockIco} onClick={(_) => { if(!ocupadoPor(node.id)) {node.lock? unLockNode(node.id) : lockNode(node.id)}}}/>
+                <img src={node.lock? lockIco : unLockIco} onClick={(_) => { if(!ocupadoPor(node.id)) { actionToggleLockNodes([node.id], !node.lock) }}}/>
                 <span style={{"background-color": node.color}} class={styles.nodeFrameIco}></span>
                 <p>{node.title?.substring(0, 18)}</p>
             </div>
@@ -210,8 +269,8 @@ const CONN_FRAME = (conn: Connection) => {
         <div class={`${styles.layerItem} ${selectedConnectionId() === conn.id? styles.selected: ""} `}
             onClick={(_) => {setSelectedConnectionId(conn.id); setSelectedNodesIds([]); }}
             >
-                <img src={deleteIco} onClick={(_) => deleteConnection(conn.id)}/>
-                <img src={categoryIco} onClick={(_) => {changeConnectionStyle(conn.id, 1 + ((conn.tipo) % 7))}}/>
+                <img src={deleteIco} onClick={(_) => actionDeleteConnection(conn.id) }/>
+                <img src={categoryIco} onClick={(_) => { actionChangeConnectionStyle(conn.id, 1 + ((conn.tipo) % 7))}}/>
                 <p>{`${getNode(conn.from)?.title || "Empty"} - ${getNode(conn.to)?.title || "Empty"}`}</p>
             </div>
     )
