@@ -5,15 +5,34 @@ import { lerp } from "../../utils/math";
 import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
 import { addConnection, connections, setConnections, setSelectedConnectionId, addConnectionProperty, changeConnectionStyle } from "../../models/connections";
 import { moveNodeThrottle, wsService } from "../../core/socket";
-import { createEffect, createSignal, Match, onCleanup, onMount, Switch, createMemo, createSelector } from "solid-js";
+import { createEffect, createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
-import { drawGrid, drawConnection, drawElasticLine, drawNode, drawNodeText, drawExternalCursor, drawPings, drawSelectionRect, drawResizingBox, focusedPoint, resizingDots, setFocusedPoint, setResizingDots, drawNodeGrid, drawConnectionPoint, setSourceAnchorPoint } from "../../core/renderer";
+
+import { 
+    drawGrid, 
+    drawConnection, 
+    drawElasticLine, 
+    drawNode, 
+    drawNodeText, 
+    drawExternalCursor, 
+    drawPings, 
+    drawSelectionRect, 
+    drawResizingBox, 
+    focusedPoint, 
+    resizingDots, 
+    setFocusedPoint, 
+    setResizingDots, 
+    drawNodeGrid, 
+    drawConnectionPoint, 
+    setSourceAnchorPoint 
+} from "../../core/renderer";
+
 import "../../App.css";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import styles from "./Editor.module.css";
-import { userData } from "../../models/userStore";
+import { addCurrentProjectProperty, updateCurrentProjectName, userData } from "../../models/userStore";
 import { COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette";
 import { activeUsers, setActiveUsers } from "../../models/users";
 import { ToastContainer } from "../components/ToastContainer";
@@ -21,17 +40,30 @@ import { showToast } from "../../models/toast";
 import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../../utils/keyboard";
 import { manageResizing } from "../../utils/resizing";
 import { calculateDiagramBounds } from "../../utils/path";
+
 import { 
     captureNodesSnapshot, 
     actionFinalizeMultipleNodesMove, 
     actionFinalizeMultipleNodesResize,
 } from "../../core/actions";
-import { getNode } from "solid-js/store/types/store.js";
+
+import { 
+    startAutosaveTimer,
+    stopAutosaveTimer,
+    saveOnClose,
+    getLatestAutosave,
+    restoreAutosave,
+    cleanOldAutosaves
+} from "../../core/autosave";
+
+import { ConfigPanel } from "./components/ConfiguracionPanel";
+import { AutosavePanel } from "./components/AutosavePanel";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
 export const [isCommandPaletteOpen, setIsCommandPaletteOpen] = createSignal(false);
 export const [isConfigPanelOpen, setIsConfigPanelOpen] = createSignal(false);
+export const [isAutosavePanelOpen, setIsAutosavePAnelopen] = createSignal(false);
 
 export const [isResizing, setIsResizing] = createSignal(false);
 export const [referencePoint, setReferencePoint] = createSignal<{x: number, y: number} | null>(null);
@@ -68,9 +100,9 @@ function updateViewportBounds() {
 
 function isNodeVisible(node: Node): boolean {
     return !(node.x + node.width < viewportBounds.x ||
-             node.x > viewportBounds.x + viewportBounds.width ||
-             node.y + node.height < viewportBounds.y ||
-             node.y > viewportBounds.y + viewportBounds.height);
+            node.x > viewportBounds.x + viewportBounds.width ||
+            node.y + node.height < viewportBounds.y ||
+            node.y > viewportBounds.y + viewportBounds.height);
 }
 
 export enum ANCHOR_POINT{
@@ -545,16 +577,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         } catch (error) {
             console.error('Error initializing CanvasKit:', error);
         }
-    });
-
-    onCleanup(() => {
-
-        wsService.closeSocket();
-        setSelectedNodesIds([]);
-        setDraggedNodeId(null);
-        setNodes([]);
-        setConnections([]);
-    });
+    });;
 
     onMount(() => {
 
@@ -566,11 +589,58 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
         document.addEventListener('mousemove', handlerGlobalMouseMove);
 
+        cleanOldAutosaves();
+
+        startAutosaveTimer(() => ({
+            zoom: nodusCanvas.camera.zoom(),
+            offsetX: nodusCanvas.camera.offsetX(),
+            offsetY: nodusCanvas.camera.offsetY()
+        }));
+
+        const latestAutosave = getLatestAutosave();
+        if(latestAutosave && latestAutosave.timestamp > Date.now() - 24 * 60 * 60 * 1000) {
+            const ageMinutes = Math.round((Date.now() - latestAutosave.timestamp) / (1000 * 60));
+            const shuoldRestore = window.confirm(
+                `Se encontro un autoguardado de hace ${ageMinutes} minutos. \n Queres restaurarlo? (Selecciona "Cancelar" paa usar el estado actual del servidor)`
+            );
+
+            if(shuoldRestore){
+                restoreAutosave(latestAutosave, (data) => {
+                    setNodes(data.nodes);
+                    setConnections(data.connections);
+                    if (data.projectName) updateCurrentProjectName(data.projectName, false);
+                    Object.entries(data.projectProperties || {}).forEach(([KeyboardEvent, value]) => {
+                        addCurrentProjectProperty(KeyboardEvent, value);
+                    });
+
+                    if(data.cameraState){
+                        nodusCanvas.camera.setZoom(data.cameraState.zoom);
+                        nodusCanvas.camera.setOffsetX(data.cameraState.offsetX);
+                        nodusCanvas.camera.setOffsetY(data.cameraState.offsetY);
+                    }
+                });
+            }
+        }
+
         onCleanup(() => {
             
             removeEditorKeyboardEvents();
 
             document.removeEventListener('mousemove', handlerGlobalMouseMove);
+
+            saveOnClose(() => ({
+                zoom: nodusCanvas.camera.zoom(),
+                offsetX: nodusCanvas.camera.offsetX(),
+                offsetY: nodusCanvas.camera.offsetY()
+            }));
+
+            stopAutosaveTimer();
+
+            wsService.closeSocket();
+            setSelectedNodesIds([]);
+            setDraggedNodeId(null);
+            setNodes([]);
+            setConnections([]);
 
         });
     });
@@ -710,7 +780,12 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
             { LAYERS_PANEL() }
 
+            { ConfigPanel() }
+
+            { <AutosavePanel onClose={() => setIsAutosavePAnelopen(false)}></AutosavePanel> }
+
             { ToastContainer() }
+
 
         </div>
     );

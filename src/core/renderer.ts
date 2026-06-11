@@ -771,7 +771,7 @@ export const exportDiagramAsPng = async (_scale?: any) => {
     }
 
     const canvas = sufrace.getCanvas();
-    canvas.clear(CK.TRANSPARENT);
+    canvas.clear((userData.currentProjectProperties as any).backgroundColor ? CK.TRANSPARENT : CK.parseColorString((userData.currentProjectProperties as any).backgroundColor));
     canvas.scale(realScale, realScale);
     canvas.translate(-bounds.x, -bounds.y);
 

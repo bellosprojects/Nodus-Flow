@@ -8,6 +8,7 @@ import editIco from "../../../assets/edit.svg";
 import layersIco from "../../../assets/layers.svg";
 import terminalIco from "../../../assets/terminal.svg";
 import configIco from "../../../assets/settings.svg";
+import autosaveIco from "../../../assets/autosave.svg";
 
 import textIco from "../../../assets/text-adjust.svg";
 import copyIco from "../../../assets/copy.svg";
@@ -32,6 +33,7 @@ import {
     isLayersPanelOpen, 
     layerView, 
     mouseOption, 
+    setIsAutosavePAnelopen, 
     setIsCommandPaletteOpen, 
     setIsConfigPanelOpen, 
     setIsEditPanelOpen, 
@@ -66,6 +68,7 @@ import {
 } from "../../../models/nodes";
 
 import { Connection, connections, selectedConnectionId, setSelectedConnectionId } from "../../../models/connections";
+import { AutosavePanel } from "./AutosavePanel";
 
 export const HEADER = () => {
     return (
@@ -110,9 +113,14 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
 
             <img src={configIco} alt="" classList={{[styles.barItem]: true, [styles.selected]: isConfigPanelOpen()}} onClick={(_) => setIsConfigPanelOpen(prev => !prev)} />
 
+            <img src={autosaveIco} alt="" class={styles.barItem} onClick={() => {
+                setIsAutosavePAnelopen(prev => !prev);
+            }} />
+            
             <img src={fullScreenIco} alt="" class={styles.barItem} onClick={onFullScreen}/>
 
             <img src={homeIco} alt="" class={styles.barItem} onClick={onHome}/>
+
 
         </div>
     )

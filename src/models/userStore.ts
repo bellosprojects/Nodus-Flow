@@ -52,9 +52,10 @@ export const addCurrentProjectProperty = (propertyName: string, propertyValue: a
     };
 
     setUserData("currentProjectProperties", properties);
+
 }
 
-export { userData };
+export { userData, setUserData };
 
 export const exportAsJson = () => {
     const data = {

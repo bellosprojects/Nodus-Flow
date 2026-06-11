@@ -13,6 +13,8 @@ class WebSocketService {
     private offlineQueue: any[] = [];
     private pingIntervalId: any = null;
     private isIntencionallyClosed = false;
+    private confilctResolver: Map<string, number> = new Map();
+    private lastSyncTimestamp: number = 0;
 
     public initSocket(){
         if(this.socket && this.socket.readyState == WebSocket.OPEN) return;
@@ -93,16 +95,15 @@ class WebSocketService {
 
     }
 
-    private handleReconnect(){
+    private handleReconnect() {
         if(this.reconnetAttemps >= this.maxReconnectAttemps){
             showToast(
-                "No se pudo restablecer la conexion. El diagrama podria estar desactualizado.",
+                "No se pudo restablecer la conexion. Los cambios se guardaron localmente.",
                 ToastType.ERROR,
                 {
-                    label: "Reintentar",
+                    label: "Guardar JSON",
                     action: () => {
-                        this.reconnetAttemps = 0;
-                        this.initSocket();
+                        import("../models/userStore").then(({ exportAsJson }) => exportAsJson());
                     }
                 }
             );
@@ -114,7 +115,7 @@ class WebSocketService {
         const delay = Math.pow(2, this.reconnetAttemps) * this.baseDelay + Math.random() * 1000;
 
         const toastId = showToast(
-            `Conexion perdida. Reconectando en ${(delay / 1000).toFixed(1)}s... (Intento ${this.reconnetAttemps}/${this.maxReconnectAttemps})`,
+            `Conexion perdida. Reconectando... (Intento ${this.reconnetAttemps}/${this.maxReconnectAttemps})`,
             ToastType.PROCESSING
         );
 
@@ -182,6 +183,34 @@ class WebSocketService {
     public isReady(){
         return this.socket && this.socket.readyState === WebSocket.OPEN;
     }
+
+    private handleConflict(data: any): void {
+        const confilctId = data.conflictId || `node_${data.nodeId}`;
+        const serverVersion = data.serverVersion;
+        const clientVersion = this.confilctResolver.get(confilctId) || 0;
+
+        if(serverVersion > clientVersion){
+            console.warn(`[WS] Conflicto detectado en ${confilctId}. Servidor tiene version mas reciente.`);
+
+            showToast(
+                `Conclicto detectado: ${data.description || "cambios en conflicto"}`,
+                ToastType.ERROR,
+                {
+                    label: "Resolver",
+                    action: () => {
+                        this.sendEvent({ tipo: 'solicitar_estado_completo' });
+                    }
+                }
+            );
+
+            const pendingChanges = this.offlineQueue.filter(q => q.conflictId === confilctId || q.id === data.nodeId);
+
+            if(pendingChanges.length > 0){
+                localStorage.setItem(`pending_conflict_${confilctId}`, JSON.stringify(pendingChanges));
+            }
+        }
+    }
+
 }
 
 export interface move {
