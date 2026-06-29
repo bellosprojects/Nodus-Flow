@@ -1,236 +1,255 @@
-/* Pantalla de carga */
+/* ============================================
+   PANTALLA DE CARGA (verificación de licencia)
+   ============================================ */
 .license-loading {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
   flex-direction: column;
-  background: rgb(43, 42, 42);
-  color: #c7c0c0;
+  background: #0a0e1a;
+  color: #a0b8c8;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+.license-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 200, 200, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 200, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
 }
 
 .spinner {
-  border: 4px solid #c7c0c0;
-  border-top: 4px solid #076e8d;
+  border: 3px solid rgba(255, 255, 255, 0.08);
+  border-top-color: #00d4e0;
   border-radius: 50%;
-  width: 50px;
-  height: 50px;
-  animation: spin 1s linear infinite;
+  width: 48px;
+  height: 48px;
+  animation: spin 0.9s linear infinite;
   margin-bottom: 20px;
 }
-
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* Pantalla de licencia expirada */
+.license-loading p {
+  font-weight: 300;
+  letter-spacing: 0.3px;
+  font-size: 0.95rem;
+}
+
+/* ============================================
+   PANTALLA DE LICENCIA EXPIRADA / RESTRINGIDA
+   ============================================ */
 .license-expired {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #1b1f31 0%, #022920 100%);
+  background: #0a0e1a;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  position: relative;
+  overflow: hidden;
 }
-
-.license-card {
-  background: white;
-  border-radius: 20px;
-  padding: 40px;
-  max-width: 500px;
-  text-align: center;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-  margin: 20px;
-}
-
-.license-icon {
-  font-size: 64px;
-  margin-bottom: 20px;
-}
-
-.license-expired h2 {
-  color: #333;
-  margin-bottom: 15px;
-  font-size: 28px;
-}
-
-.license-expired p {
-  color: #666;
-  margin-bottom: 20px;
-  line-height: 1.5;
-}
-
-.expiry-info {
-  background: #f5f5f5;
-  padding: 12px;
-  border-radius: 10px;
-  margin: 20px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.expiry-info span {
-  color: #666;
-}
-
-.expiry-info strong {
-  color: #ff9800;
-  font-size: 18px;
-}
-
-.contact-info {
-  margin: 20px 0;
-  padding: 15px;
-  background: #f5f5f5;
-  border-radius: 10px;
-}
-
-.contact-info p {
-  margin-bottom: 10px;
-  color: #5b5d5f;
-}
-
-.contact-info a {
-  color: #0b6c85;
-  text-decoration: none;
-  font-weight: bold;
-  font-size: 16px;
-}
-
-.retry-button {
-  background: #04495e;
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  margin-top: 10px;
-  transition: background 0.3s;
-}
-
-.retry-button:hover {
-  background: #055c5f;
-}
-
-/* Banner de advertencia */
-.license-warning {
-  background: #ff9800;
-  color: white;
-  padding: 12px;
-  text-align: center;
-  font-weight: bold;
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-100%);
-  }
-  to {
-    transform: translateY(0);
-  }
-}
-
-.app-header {
-  background: white;
-  padding: 20px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 15px;
-}
-
-.app-header h1 {
-  color: #333;
-  font-size: 24px;
-}
-
-.license-status {
-  display: flex;
-  gap: 10px;
-}
-
-.badge {
-  background: #4caf50;
-  color: white;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 14px;
+.license-expired::before {
+  content: '';
   position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 200, 200, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 200, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
 }
 
-.badge.days {
-  background: #2196f3;
-}
-
-.app-main {
-  padding: 20px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.content {
-  background: white;
-  border-radius: 12px;
-  padding: 30px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.content h2 {
-  color: #333;
-  margin-bottom: 20px;
-}
-
-.demo-card {
-  background: #f9f9f9;
-  padding: 20px;
-  border-radius: 8px;
-  margin: 20px 0;
+/* Tarjeta glassmorfista con borde neón */
+.license-card {
+  background: rgba(12, 18, 30, 0.75);
+  backdrop-filter: blur(16px);
+  border-radius: 36px;
+  padding: 2.2rem 2.4rem 1.8rem;
+  width: 440px;
+  max-width: 92%;
+  box-shadow: 0 30px 50px -20px rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(0, 200, 200, 0.15);
+  position: relative;
+  transition: all 0.3s ease;
   text-align: center;
 }
+.license-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 36px;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(0, 200, 200, 0.2), transparent 60%);
+  -webkit-mask-composite: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
 
-.demo-card button {
-  background: #667eea;
+/* Icono SVG (candado / advertencia) */
+.license-icon {
+  display: inline-block;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 0.5rem;
+  stroke: #00d4e0;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.license-icon.warning {
+  stroke: #ffb74d;
+}
+
+.license-card h2 {
+  font-size: 1.7rem;
+  font-weight: 600;
+  color: #e8f0f8;
+  margin: 0.2rem 0 0.5rem 0;
+  background: linear-gradient(135deg, #e0f0ff, #80d0e0);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  letter-spacing: -0.3px;
+}
+
+.license-card .message {
+  color: #b0c8d8;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0.8rem 0 1.2rem 0;
+  font-weight: 300;
+}
+
+/* Información de expiración */
+.expiry-info {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 12px 16px;
+  border-radius: 14px;
+  margin: 1rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #a0b8c8;
+  font-size: 0.9rem;
+}
+.expiry-info strong {
+  color: #ffb74d;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+/* Contacto */
+.contact-info {
+  margin: 1.2rem 0;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.contact-info p {
+  color: #a0b8c8;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+.contact-info a {
+  color: #7abfff;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: color 0.2s;
+}
+.contact-info a:hover {
+  color: #a0d4ff;
+}
+
+/* Botón Retry */
+.retry-button {
+  background: linear-gradient(135deg, #00b8c8, #0080a8);
   color: white;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-size: 16px;
+  padding: 12px 28px;
+  border-radius: 40px;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
-  margin-top: 10px;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(0, 180, 200, 0.2);
+  letter-spacing: 0.3px;
+  margin-top: 0.5rem;
+}
+.retry-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 180, 200, 0.35);
+  background: linear-gradient(135deg, #00c8d8, #0090b8);
+}
+.retry-button:active {
+  transform: translateY(1px);
 }
 
-.demo-card button:hover {
-  background: #5a67d8;
-}
-
-.info-card {
-  background: #e8f4f8;
-  padding: 20px;
-  border-radius: 8px;
-  margin: 20px 0;
-}
-
-.info-card code {
-  background: #333;
-  color: #4caf50;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
+/* Device ID (opcional) */
+.device-id {
+  margin-top: 1.8rem;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.15);
+  letter-spacing: 0.3px;
   word-break: break-all;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 1rem;
 }
 
-.hint {
-  color: #666;
-  font-size: 14px;
-  margin-top: 15px;
-  font-style: italic;
+/* Footer de la app (mismo estilo que en Auth) */
+.app-footer {
+  margin-top: 1.8rem;
+  text-align: center;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.5px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  padding-top: 1.2rem;
+}
+.app-footer span {
+  opacity: 0.7;
+}
+.app-footer .company {
+  opacity: 0.5;
+}
+
+/* ============================================
+   RESPONSIVIDAD
+   ============================================ */
+@media (max-width: 480px) {
+  .license-card {
+    padding: 1.8rem 1.2rem 1.5rem;
+    border-radius: 28px;
+  }
+  .license-card h2 {
+    font-size: 1.4rem;
+  }
+  .license-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .expiry-info {
+    flex-direction: column;
+    gap: 6px;
+    text-align: center;
+  }
+  .retry-button {
+    width: 100%;
+    padding: 12px;
+  }
+  .contact-info a {
+    font-size: 0.9rem;
+  }
 }

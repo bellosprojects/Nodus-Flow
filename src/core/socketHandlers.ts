@@ -1,9 +1,11 @@
 import { addConnectionProperty, changeConnectionStyle, createRemoteConnection, deleteConnection, deleteConnectionProperty } from "../models/connections";
 import { addNodeProperty, addRemoteNode, changeNodeStyle, deleteNode, deleteNodeProperty, lockNode, moveToBack, moveToFront, unLockNode, updateNodeColor, updateNodeOpacity, updateNodeRadius, updateNodeRemote, updateNodeSize, updateNodoTitle } from "../models/nodes";
 import { addPing } from "../models/ping";
+import { removeToast, showToast, ToastType } from "../models/toast";
 import { setActiveUsers, updateCursor, User } from "../models/users";
-import { updateCurrentProjectName } from "../models/userStore";
+import { addCurrentProjectProperty, deleteCurrentProjectProperty, setUserData, updateCurrentProjectName } from "../models/userStore";
 import { nodusCanvas } from "./NodusCanvas";
+import { initToastId, resetToast } from "./socket";
 
 type SokectHandler = (data: any) => void;
 
@@ -19,8 +21,14 @@ export const eventHandlers: Record<string, SokectHandler> = {
         for(let conn of data.conexiones){
             createRemoteConnection(conn.id, conn.origenId, conn.destinoId, conn.style || 1, conn.properties || {});
         }
+        setUserData("currentProjectProperties", data.propiedades);
         updateCurrentProjectName(data.nombre, false);
         nodusCanvas.camera.centerCameraNow();
+        if(initToastId){
+            removeToast(initToastId);
+            resetToast();
+        }
+        showToast("Sala Cargada", ToastType.SUCCES);
     },
     'mover_nodos': (data) => {
         for(let nodo of data.nodos){
@@ -44,7 +52,8 @@ export const eventHandlers: Record<string, SokectHandler> = {
                 color: user.color,
                 x: user.x,
                 y: user.y,
-                object: user.objeto
+                object: user.objeto,
+                user_id: user.user_id
             }
             newUsersList.push(newUser);
         }
@@ -64,6 +73,7 @@ export const eventHandlers: Record<string, SokectHandler> = {
         updateCurrentProjectName(data.nombre, false);
     },
     'redimensionar_nodo': (data) => {
+        updateNodeRemote(data.id, data.x, data.y);
         updateNodeSize(data.id, data.w, data.h);
     },
     'enviar_al_fondo': (data) => {
@@ -83,15 +93,16 @@ export const eventHandlers: Record<string, SokectHandler> = {
     },
     'mover_cursor': (data) => {
         updateCursor(data.nombre, data.x, data.y);
+        nodusCanvas.requestRedraw();
     },
     'ping_atencion': (data) => {
         addPing(data.x, data.y, data.color, data.nombre, false);
     },
     'cambiar_estilo_conexion': (data) => {
-        changeConnectionStyle(data.id, data.estilo);
+        changeConnectionStyle(data.id, data.estilo, false);
     },
     'cambiar_estilo_nodo': (data) => {
-        changeNodeStyle(data.id, data.estilo);
+        changeNodeStyle(data.id, data.estilo, false);
     },
     'cambiar_nodo_property': (data) => {
         addNodeProperty(data.id, data.propertyName, data.propertyValue, false);
@@ -104,5 +115,11 @@ export const eventHandlers: Record<string, SokectHandler> = {
     },
     'deletear_conexion_property': (data) => {
         deleteConnectionProperty(data.id, data.propertyName, false);
+    },
+    'cambiar_proyecto_property': (data) => {
+        addCurrentProjectProperty(data.propertyName, data.propertyValue, false);
+    },
+    'deletear_proyecto_property': (data) => {
+        deleteCurrentProjectProperty(data.propertyName, false);
     }
 };

@@ -149,8 +149,9 @@ export const BaseProperties = (props: {node: Node}) => {
 
     const handleTitleBlur = (e: Event) => {
         const newTitle = (e.target as HTMLInputElement).value;
+        console.log(`Nodo ${node.id}: Titulo Cambiado de ${titleSnapshot} a ${newTitle}`);
         if (titleSnapshot !== newTitle) {
-            actionUpdateNodeTitle(node.id, newTitle);
+            actionUpdateNodeTitle(node.id, titleSnapshot, newTitle);
         }
     };
 
@@ -168,7 +169,7 @@ export const BaseProperties = (props: {node: Node}) => {
     const handleColorBlur = (e: Event) => {
         const newColor = (e.target as HTMLInputElement).value;
         if (colorSnapshot !== newColor) {
-            actionUpdateNodeColor(node.id, newColor);
+            actionUpdateNodeColor(node.id, colorSnapshot, newColor);
         }
     };
 
@@ -186,7 +187,7 @@ export const BaseProperties = (props: {node: Node}) => {
     const handleOpacityBlur = (e: Event) => {
         const newOpacity = parseFloat((e.target as HTMLInputElement).value);
         if (opacitySnapshot !== newOpacity) {
-            actionUpdateNodeOpacity(node.id, newOpacity);
+            actionUpdateNodeOpacity(node.id, opacitySnapshot, newOpacity);
         }
     };
 
@@ -204,7 +205,7 @@ export const BaseProperties = (props: {node: Node}) => {
     const handleRadiusBlur = (e: Event) => {
         const newRadius = parseFloat((e.target as HTMLInputElement).value);
         if (radiusSnapshot !== newRadius) {
-            actionUpdateNodeRadius(node.id, newRadius);
+            actionUpdateNodeRadius(node.id, radiusSnapshot, newRadius);
         }
     };
 
@@ -222,7 +223,7 @@ export const BaseProperties = (props: {node: Node}) => {
     const handleStyleBlur = (e: Event) => {
         const newStyle = parseInt((e.target as HTMLInputElement).value);
         if (styleSnapshot !== newStyle) {
-            actionChangeNodeStyle(node.id, newStyle);
+            actionChangeNodeStyle(node.id, styleSnapshot, newStyle);
         }
     };
 
@@ -304,7 +305,6 @@ export const BaseProperties = (props: {node: Node}) => {
                     <input
                         type="color" 
                         value={node.color}
-                        style={{width: "100%", border: "none", "border-radius": "8px"}}
                         onFocus={handleColorFocus}
                         onInput={handleColorChange}
                         onBlur={handleColorBlur}
@@ -323,7 +323,7 @@ export const BaseProperties = (props: {node: Node}) => {
                         onFocus={handleOpacityFocus}
                         onInput={handleOpacityChange}
                         onBlur={handleOpacityBlur}
-                    />
+                        />
                 </div>
             </section>
 
@@ -339,6 +339,7 @@ export const BaseProperties = (props: {node: Node}) => {
                         onFocus={handleRadiusFocus}
                         onInput={handleRadiusChange}
                         onBlur={handleRadiusBlur}
+                        disabled={node.style !== 1}
                     />
                 </div>
             </section>
@@ -350,7 +351,7 @@ export const BaseProperties = (props: {node: Node}) => {
                         onFocus={handleStyleFocus}
                         onInput={handleStyleChange}
                         onBlur={handleStyleBlur}
-                        style={{width: "100%", background: "#1e1e1e", color: "white", border: "1px solid rgba(255,255,255,0.08)", "border-radius": "8px", padding: "6px"}}>
+                        class={styles.styleSelect}>
                         <option value={1}>Rectangle</option>
                         <option value={2}>Ellipse</option>
                         <option value={3}>Diamond</option>
@@ -376,11 +377,12 @@ const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
     const suggestedProps = [
         "underline", 
         "doubleBorder",
-        "dashedBorder",
+        "dashedBorder", 
         "borderWidth",
         "dashedUnderline",
         "disjointMembership",
         "overlappingMembership",
+        "isSon",
         "textAbove", 
         "textBelow", 
         "textLeft",

@@ -1,0 +1,134 @@
+/* Autosave Panel */
+.autosaveOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    pointer-events: auto;
+}
+
+.autosavePanel {
+    background: rgba(30, 30, 40, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    width: 90%;
+    max-width: 700px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.autosaveHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.autosaveHeader h3 {
+    margin: 0;
+    color: white;
+    font-size: 18px;
+}
+
+.closeBtn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+}
+
+.closeBtn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.autosaveList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.autosaveItem {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.autosaveItem:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateX(4px);
+}
+
+.autosaveItem.selected {
+    border-color: rgba(100, 180, 250, 0.5);
+    background: rgba(100, 180, 250, 0.1);
+}
+
+.autosaveInfo {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.autosaveStats {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.8);
+    margin-bottom: 10px;
+}
+
+.restoreBtn {
+    background: rgba(100, 180, 250, 0.2);
+    border: 1px solid rgba(100, 180, 250, 0.3);
+    border-radius: 8px;
+    padding: 6px 12px;
+    color: #64b4fa;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: fit-content;
+}
+
+.restoreBtn:hover {
+    background: rgba(100, 180, 250, 0.35);
+    transform: scale(1.02);
+}
+
+.autosaveFooter {
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    text-align: center;
+}
+
+.emptyState {
+    text-align: center;
+    padding: 40px;
+    color: rgba(255, 255, 255, 0.4);
+}

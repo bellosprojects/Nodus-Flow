@@ -1,6 +1,7 @@
 import { createStore } from "solid-js/store";
 import { wsService } from "../core/socket";
 import { createMemo, createSignal } from "solid-js";
+import { generarUUID } from "../utils/math";
 
 export interface Connection {
     id: string,
@@ -19,7 +20,7 @@ export const selectedConnection = createMemo(() => connections.find(c => c.id ==
 export const addConnection = (fromId: string, toId: string) => {
     if(fromId === toId) return;
 
-    const newID = Math.random().toString(36).substring(6);
+    const newID = generarUUID();
     const newConn: Connection = { from: fromId, to: toId, id: newID, tipo: 1, properties: {} };
 
     setConnections([...connections, newConn]);
@@ -65,10 +66,11 @@ export const deleteConnection = (id: string, send = true) => {
     }
 }
 
-export const changeConnectionStyle = (id: string, newStyle: number) => {
+export const changeConnectionStyle = (id: string, newStyle: number, send = true) => {
 
     setConnections(conn => conn.id === id, "tipo", newStyle);
 
+    if(send)
     wsService.sendEvent({
         tipo: "cambiar_estilo_conexion",
         id: id,

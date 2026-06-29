@@ -1,14 +1,14 @@
 // ConfigPanel.tsx
 import { For, Show, createMemo, createSignal } from "solid-js";
-import { nodes, selectedNodes } from "../../../models/nodes";
-import { connections } from "../../../models/connections";
-import { activeUsers, User } from "../../../models/users";
-import { userData, updateCurrentProjectName, addCurrentProjectProperty, setUserData } from "../../../models/userStore";
-import { isConfigPanelOpen, setIsConfigPanelOpen } from "../Editor";
+import { nodes, selectedNodes } from "../../../../models/nodes";
+import { connections } from "../../../../models/connections";
+import { activeUsers, User, useUser } from "../../../../models/users";
+import { userData, updateCurrentProjectName, addCurrentProjectProperty, deleteCurrentProjectProperty } from "../../../../models/userStore";
+import { isConfigPanelOpen, setIsConfigPanelOpen } from "../../Editor";
 import styles from "./ConfigPanel.module.css";
 
-import deleteIcon from "../../../assets/delete.svg";
-import closeIcon from "../../../assets/home.svg";
+import deleteIcon from "../../../../assets/delete.svg";
+import closeIcon from "../../../../assets/home.svg";
 
 // Tipos para propiedades de la sala
 interface RoomProperty {
@@ -19,15 +19,12 @@ interface RoomProperty {
 // Props sugeridas para autocompletar
 const SUGGESTED_ROOM_PROPS = [
     "backgroundColor",
-    "gridEnabled",
     "snapToGrid",
-    "allowEditors",
-    "readOnly",
-    "maxNodes",
+    "showHistory",
+    "showCameraInfo",
     "version",
     "description",
-    "tags",
-    "owner"
+    "tags"
 ];
 
 export const ConfigPanel = () => {
@@ -44,20 +41,26 @@ export const ConfigPanel = () => {
         selectedNodes: selectedNodes().length,
     }));
 
+    console.log(useUser().id());
+    console.log(activeUsers);
+
     // Usuarios conectados (excluyendo al actual)
     const otherUsers = createMemo(() => 
-        activeUsers.filter(u => u.nombre !== userData.name)
+        activeUsers.filter(u => u.user_id !== useUser().id())
     );
 
     // Propiedades de la sala (de userData)
-    const roomProperties = createMemo(() => {
+
+    
+    const roomProperties = () => {
         const props: RoomProperty[] = [];
-        const currentProps = (userData.currentProjectProperties || {}) as Record<string, any>;
-        Object.keys(currentProps).forEach(key => {
-            props.push({ key: key, value: currentProps[key] });
+        const { currentProjectProperties } = userData;
+        console.log("Memo ejecutado, propiedades:", currentProjectProperties);
+        Object.keys(currentProjectProperties).forEach(key => {
+            props.push({ key, value: currentProjectProperties[key] });
         });
         return props;
-    });
+    };
 
     const addProperty = () => {
         const key = newPropKey().trim();
@@ -68,10 +71,7 @@ export const ConfigPanel = () => {
     };
 
     const deleteProperty = (key: string) => {
-        const newProps = { ...userData.currentProjectProperties } as Record<string, any>;
-        delete newProps[key];
-        // Actualizar directamente el store
-        setUserData("currentProjectProperties", newProps);
+        deleteCurrentProjectProperty(key);
     };
 
     const updateProperty = (key: string, value: string) => {
@@ -145,10 +145,10 @@ export const ConfigPanel = () => {
                                 {/* Current user */}
                                 <div class={styles.userItem}>
                                     <div class={styles.userAvatar} style={{ "background-color": "#4a4a4a" }}>
-                                        {getInitials(userData.name)}
+                                        {getInitials(useUser().name() || "")}
                                     </div>
                                     <div class={styles.userInfo}>
-                                        <span class={styles.userName}>{userData.name}</span>
+                                        <span class={styles.userName}>{useUser().name()}</span>
                                         <span class={styles.userBadge}>You</span>
                                     </div>
                                 </div>
@@ -196,7 +196,8 @@ export const ConfigPanel = () => {
                                                 type="text"
                                                 class={styles.propertyValue}
                                                 value={prop.value}
-                                                onInput={(e) => updateProperty(prop.key, e.currentTarget.value)}
+                                                onBlur={(e) => updateProperty(prop.key, e.currentTarget.value)}
+                                                onChange={(e) => updateProperty(prop.key, e.currentTarget.value)}
                                             />
                                             <button
                                                 class={styles.deletePropBtn}

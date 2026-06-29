@@ -1,0 +1,107 @@
+.commandPalette {
+    z-index: 999;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    width: 50%;
+    max-width: 750px;
+    font-size: 14px;
+    margin-top: 10px;
+    margin-left: 20px;
+    max-height: 50%;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(20px);
+}
+
+.searchBar {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    width: calc(100% - 10px);
+    padding: 0 5px 8px 5px;
+    margin-right: 5px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.searchBar img{
+    width: 13px;
+    filter: invert(80%);
+}
+
+.searchBar input{
+    border: none;
+    outline: none;
+    background-color: transparent;
+    pointer-events: auto;
+    color: white;
+    flex-grow: 1;
+}
+
+.searchBar input:focus{
+    outline: none;
+}
+
+.countResult {
+    border: none;
+    background-color: rgba(255,255,255,0.05);
+    color: white;
+    padding: 3px 6px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.searchResults {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: scroll;
+    background: transparent;
+    padding-right: 5px;
+}
+
+.searchResults::-webkit-scrollbar {
+    width: 8px;
+}
+
+.searchResults::-webkit-scrollbar-thumb {
+    background-color: transparent;
+}
+
+.searchResults::-webkit-scrollbar-thumb {
+    border-radius: 20px;
+    background-color: #ccc;
+}
+
+.searchItem {
+    font-size: 14px;
+    color: white;
+    margin: 0;
+    padding: 5px;
+    border-radius: 5px;
+    pointer-events: auto;
+    cursor: pointer;
+    position: relative;
+    padding-left: 30px;
+}
+
+.searchItem.selected {
+    background-color: rgba(255,255,255,0.1);
+}
+
+.searchItem::after{
+    content: '';
+    position: absolute;
+    top: 20%;
+    height: 60%;
+    width: 16px;
+    border-radius: 2px;
+    left: 5px;
+    background: var(--node-color);
+}
+
+.searchItem.searchItem.selected::after{
+    box-shadow: 0 0 4px var(--node-color);
+}

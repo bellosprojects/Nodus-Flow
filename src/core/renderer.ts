@@ -1,6 +1,6 @@
 import { Canvas, CanvasKit, FontMgr } from "canvaskit-wasm";
 import { getNode, Node, nodes, ocupadoPor, selectedNodesIds } from "../models/nodes";
-import { calculateDiagramBounds, NodeToNode } from "../utils/path";
+import { calculateDiagramBounds, getConnectionPathData, getSVGPathFromConnectionData, NodeToNode } from "../utils/path";
 import { HexToColor } from "../utils/color";
 import { obtenerColorTexto } from "../utils/color";
 import { GRID_SIZE } from "../utils/math";
@@ -13,6 +13,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
 import { createSignal } from "solid-js";
 import { userData } from "../models/userStore";
+import { estimateTextLayout, renderTextToSvg } from "../utils/svgtextLayout";
 
 // Cache de pinturas reutilizables
 const paintCache = new Map<string, any>();
@@ -20,27 +21,38 @@ const pathCache = new Map<string, any>();
 const shaderCache = new Map<string, any>();
 const paragraphCache = new Map<string, any>();
 
+let cacheVersion = 0;
+
 function getPaint(CK: CanvasKit, key: string, init: (paint: any) => void): any {
-    let paint = paintCache.get(key);
-    if (!paint) {
+    
+    const cacheKey = `${key}_v${cacheVersion}`;
+    let paint = paintCache.get(cacheKey);
+    
+    // Si no existe o si CanvasKit ya destruyó el puntero interno
+    if (!paint || paint.isDeleted()) { 
         paint = new CK.Paint();
         paintCache.set(key, paint);
     }
-    init(paint);
+    
+    init(paint); // Seguro de llamar porque paint ahora está 100% vivo
     return paint;
 }
 
 function getPath(CK: CanvasKit, key: string): any {
-    let path = pathCache.get(key);
-    if (!path) {
+    const cacheKey = `${key}_v${cacheVersion}`;
+    let path = pathCache.get(cacheKey);
+    
+    if (!path || path.isDeleted()) {
         path = new CK.Path();
         pathCache.set(key, path);
     }
+    
     return path;
 }
 
 function getShader(_: CanvasKit, key: string, init: () => any): any {
-    let shader = shaderCache.get(key);
+    const cacheKey = `${key}_v${cacheVersion}`;
+    let shader = shaderCache.get(cacheKey);
     if (!shader) {
         shader = init();
         shaderCache.set(key, shader);
@@ -48,8 +60,22 @@ function getShader(_: CanvasKit, key: string, init: () => any): any {
     return shader;
 }
 
-function getParagraph(CK: CanvasKit, text: string, style: any, fontMgr: FontMgr): any {
-    const key = `${text}_${JSON.stringify(style)}`;
+function getParagraph(CK: CanvasKit, text: string, style: any, fontMgr: FontMgr, node: string): any {
+    // Crear una clave más específica que incluya todas las propiedades relevantes
+    const styleKey = JSON.stringify({
+        color: style.color,
+        fontSize: style.fontSize,
+        fontFamilies: style.fontFamilies,
+        decoration: style.decoration,
+        decorationColor: style.decorationColor,
+        decorationThickness: style.decorationThickness,
+        decorationStyle: style.decorationStyle,
+        node: node
+    });
+
+    const cacheKey = `${styleKey}_v${cacheVersion}`;
+    const key = `${text}_${cacheKey}`;
+    
     let paragraph = paragraphCache.get(key);
     if (!paragraph) {
         const builder = CK.ParagraphBuilder.Make(style, fontMgr);
@@ -62,8 +88,35 @@ function getParagraph(CK: CanvasKit, text: string, style: any, fontMgr: FontMgr)
 
 // Limpiar caché cuando cambia el zoom (para textos que dependen del tamaño)
 export function invalidateParagraphCache() {
-    paragraphCache.forEach(p => p.delete());
+    paragraphCache.forEach(p => {
+        if (p && !p.isDeleted()) p.delete();
+    });
     paragraphCache.clear();
+}
+
+export function invalidateAllResources() {
+    cacheVersion++;
+    paintCache.forEach(paint => {
+        if (paint && !paint.isDeleted()) paint.delete();
+    });
+    paintCache.clear();
+    
+    pathCache.forEach(path => {
+        if (path && !path.isDeleted()) path.delete();
+    });
+    pathCache.clear();
+    
+    shaderCache.forEach(shader => {
+        if (shader && !shader.isDeleted()) shader.delete();
+    });
+    shaderCache.clear();
+    
+    paragraphCache.forEach(para => {
+        if (para && !para.isDeleted()) para.delete();
+    });
+    paragraphCache.clear();
+    
+    console.debug(`All CanvasKit resources invalidated (v${cacheVersion})`);
 }
 
 export const drawNodeOpcionalText = (CK: CanvasKit, canvas: Canvas, node: Node) => {
@@ -79,7 +132,7 @@ export const drawNodeOpcionalText = (CK: CanvasKit, canvas: Canvas, node: Node) 
             textAlign: CK.TextAlign.Center,
         });
 
-        const textAboveParagraph = getParagraph(CK, node.properties.textAbove, textAboveParagraphStyle, nodusCanvas.getFont()!);
+        const textAboveParagraph = getParagraph(CK, node.properties.textAbove, textAboveParagraphStyle, nodusCanvas.getFont()!, node.id);
         textAboveParagraph.layout(node.width);
         canvas.drawParagraph(textAboveParagraph, node.x, node.y - textAboveParagraph.getHeight() - (node.properties.textOffset || 5));
     }
@@ -96,7 +149,7 @@ export const drawNodeOpcionalText = (CK: CanvasKit, canvas: Canvas, node: Node) 
             textAlign: CK.TextAlign.Center,
         });
 
-        const textBelowParagraph = getParagraph(CK, node.properties.textBelow, textBelowParagraphStyle, nodusCanvas.getFont()!);
+        const textBelowParagraph = getParagraph(CK, node.properties.textBelow, textBelowParagraphStyle, nodusCanvas.getFont()!, node.id);
         textBelowParagraph.layout(node.width);
         canvas.drawParagraph(textBelowParagraph, node.x, node.y + node.height + (node.properties.textOffset || 5));
     }
@@ -113,7 +166,7 @@ export const drawNodeOpcionalText = (CK: CanvasKit, canvas: Canvas, node: Node) 
             textAlign: CK.TextAlign.Right,
         });
 
-        const textLeftParagraph = getParagraph(CK, node.properties.textLeft, textLeftParagraphStyle, nodusCanvas.getFont()!);
+        const textLeftParagraph = getParagraph(CK, node.properties.textLeft, textLeftParagraphStyle, nodusCanvas.getFont()!, node.id);
         textLeftParagraph.layout(200);
         canvas.drawParagraph(textLeftParagraph, node.x - textLeftParagraph.getMaxWidth() - (node.properties.textOffset || 5), node.y + (node.height / 2) - (textLeftParagraph.getHeight() / 2));
     }
@@ -130,7 +183,7 @@ export const drawNodeOpcionalText = (CK: CanvasKit, canvas: Canvas, node: Node) 
             textAlign: CK.TextAlign.Left,
         });
         
-        const textRightParagraph = getParagraph(CK, node.properties.textRight, textRightParagraphStyle, nodusCanvas.getFont()!);
+        const textRightParagraph = getParagraph(CK, node.properties.textRight, textRightParagraphStyle, nodusCanvas.getFont()!, node.id);
         textRightParagraph.layout(200);
         canvas.drawParagraph(textRightParagraph, node.x + node.width + (node.properties.textOffset || 5), node.y + (node.height / 2) - (textRightParagraph.getHeight() / 2));
     }
@@ -139,6 +192,9 @@ export const drawNodeOpcionalText = (CK: CanvasKit, canvas: Canvas, node: Node) 
 export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = false) => {
     const color = HexToColor(node.color);
     const fillColor = CK.Color(color[0], color[1], color[2], node.opacity);
+
+    const safeRadius = Number(node.radius) || 0;
+
     const rectBounds = CK.LTRBRect(node.x, node.y, node.x + node.width, node.y + node.height);
 
     if(node.properties.dashedBorder){
@@ -146,9 +202,22 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
             p.setAntiAlias(true);
             p.setDither(true);
             p.setStyle(CK.PaintStyle.Stroke);
+            p.setColor(CK.parseColorString(node.color));
         });
         
-        const dash = node.properties.dashedBorder || 3;
+        let dash = 3;
+
+        try{
+            dash = parseInt(node.properties.dashedBorder) || 3;
+
+        } catch (_) {
+
+        }
+
+        if(!dash || dash == null){
+            dash = 3;
+        }
+
         const dashPathEffect = CK.PathEffect.MakeDash([dash, dash], 0);
         const borderWidth = node.properties.borderWidth || 2;
         const path = getPath(CK, `dashed_path_${node.id}`);
@@ -168,7 +237,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
                 path.close();
                 break;
             default:
-                const rrect = CK.RRectXY(rectBounds, node.radius, node.radius);
+                const rrect = CK.RRectXY(rectBounds, safeRadius, safeRadius);
                 path.addRRect(rrect);
         }
 
@@ -202,7 +271,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
                 canvas.drawPath(shapePath, fillPaint);
                 break;
             default:
-                const rrect = CK.RRectXY(rectBounds, node.radius, node.radius);
+                const rrect = CK.RRectXY(rectBounds, safeRadius, safeRadius);
                 canvas.drawRRect(rrect, fillPaint);
         }
     }
@@ -232,7 +301,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
                 canvas.drawPath(diamondPath, borderPaint);
                 break;
             default:
-                const rrectBorder = CK.RRectXY(CK.LTRBRect(node.x - 6, node.y - 6, node.x + node.width + 6, node.y + node.height + 6), node.radius + 6, node.radius + 6);
+                const rrectBorder = CK.RRectXY(CK.LTRBRect(node.x - 6, node.y - 6, node.x + node.width + 6, node.y + node.height + 6), safeRadius + 6, safeRadius + 6);
                 canvas.drawRRect(rrectBorder, borderPaint);
         }
     }
@@ -292,7 +361,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
                 bigPath.close();
                 canvas.drawPath(bigPath, occupiedPaint);
             } else {
-                const rect2 = CK.RRectXY(CK.LTRBRect(node.x - 5, node.y - 5, node.x + node.width + 5, node.y + node.height + 5), node.radius + 5, node.radius + 5);
+                const rect2 = CK.RRectXY(CK.LTRBRect(node.x - 5, node.y - 5, node.x + node.width + 5, node.y + node.height + 5), safeRadius + 5, safeRadius + 5);
                 canvas.drawRRect(rect2, occupiedPaint);
             }
 
@@ -305,7 +374,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
                 textStyle: textStyle,
                 textAlign: CK.TextAlign.Left,
             });
-            const textParagraph = getParagraph(CK, `Occupied by: ${user.nombre}`, paragraphStyle, nodusCanvas.getFont()!);
+            const textParagraph = getParagraph(CK, `Occupied by: ${user.nombre}`, paragraphStyle, nodusCanvas.getFont()!, node.id);
             textParagraph.layout(300);
             canvas.drawParagraph(textParagraph, node.x + 10, node.y - 22);
         } else if(selectedNodesIds().includes(node.id)){
@@ -332,7 +401,7 @@ export const drawNode = (CK: CanvasKit, canvas: Canvas, node: Node, isExport = f
                 selPath.close();
                 canvas.drawPath(selPath, selectedPaint);
             } else {
-                const rectSel = CK.RRectXY(CK.LTRBRect(node.x - 2, node.y - 2, node.x + node.width + 2, node.y + node.height + 2), node.radius + 4, node.radius + 4);
+                const rectSel = CK.RRectXY(CK.LTRBRect(node.x - 2, node.y - 2, node.x + node.width + 2, node.y + node.height + 2), safeRadius + 4, safeRadius + 4);
                 canvas.drawRRect(rectSel, selectedPaint);
             }
         }
@@ -481,7 +550,7 @@ export const drawConnection = (CK: CanvasKit, canvas: Canvas, fromNode: Node, to
             textStyle: textStyle,
             textAlign: CK.TextAlign.Center,
         });
-        const textParagraph = getParagraph(CK, conn.properties.label, textParagraphStyle, nodusCanvas.getFont()!);
+        const textParagraph = getParagraph(CK, conn.properties.label, textParagraphStyle, nodusCanvas.getFont()!, conn.id);
 
         const fromCenter = {
             x: fromNode.x + fromNode.width / 2,
@@ -507,44 +576,6 @@ export const drawConnection = (CK: CanvasKit, canvas: Canvas, fromNode: Node, to
     path.delete();
 };
 
-export const drawBackground = () => {
-    const nodus = nodusCanvas;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const CK = nodus.getCK();
-    const canvas = nodus.getCanvas();
-    
-    const diagonal = Math.sqrt(width * width + height * height);
-    const paint = getPaint(CK, "background", (p) => {
-        p.setDither(true);
-        p.setAntiAlias(true);
-    });
-
-    const gradient = getShader(CK, "bg_gradient1", () => 
-        CK.Shader.MakeRadialGradient(
-            [0, 0], diagonal, 
-            [CK.Color(30, 14, 36), CK.Color(0,0,0,0)],
-            [0, 1],
-            CK.TileMode.Clamp
-        )
-    );
-
-    const gradient2 = getShader(CK, "bg_gradient2", () => 
-        CK.Shader.MakeRadialGradient(
-            [width, height], diagonal, 
-            [CK.Color(12, 42, 26), CK.Color(0,0,0,0)],
-            [0, 1],
-            CK.TileMode.Clamp
-        )
-    );
-
-    paint.setShader(gradient);
-    canvas.drawRect(CK.LTRBRect(0, 0, diagonal, diagonal), paint);
-    
-    paint.setShader(gradient2);
-    canvas.drawRect(CK.LTRBRect(width - diagonal, height - diagonal, width, height), paint);
-};
-
 export const drawNodeText = (CK: CanvasKit, canvas: Canvas, node: Node, fontMgr: FontMgr | null) => {
     if(!fontMgr) return;
 
@@ -558,7 +589,7 @@ export const drawNodeText = (CK: CanvasKit, canvas: Canvas, node: Node, fontMgr:
         fontFamilies: ['Inter 28pt Mudium'],
         decoration: haveUnderline ? CK.UnderlineDecoration : CK.NoDecoration,
         decorationColor: CK.parseColorString(color),
-        decorationThickness: 1,
+        decorationThickness: haveUnderline? 2 : 1,
         decorationStyle: isDashedUnderline ? CK.DecorationStyle.Dashed : CK.DecorationStyle.Solid
     });
 
@@ -567,7 +598,7 @@ export const drawNodeText = (CK: CanvasKit, canvas: Canvas, node: Node, fontMgr:
         textAlign: CK.TextAlign.Center,
     });
 
-    const paragraph = getParagraph(CK, node.title || "Nuevo Nodo", paragraphStyle, fontMgr);
+    const paragraph = getParagraph(CK, node.title || "", paragraphStyle, fontMgr, node.id);
     paragraph.layout(node.width - 20);
     canvas.drawParagraph(paragraph, node.x + 10, node.y + (node.height / 2) - paragraph.getHeight() / 2);
 };
@@ -620,7 +651,19 @@ export const drawGrid = (activePos: {x: number, y: number}) => {
     if(activePos && (Math.abs(activePos.x - lastGridActivePos.x) > 50 || Math.abs(activePos.y - lastGridActivePos.y) > 50)) {
         lastGridActivePos = { x: activePos.x, y: activePos.y };
         const oldShader = shaderCache.get("grid_gradient");
-        if(oldShader) oldShader.delete();
+        
+        if(oldShader) {
+            // Desvincular el shader de la pintura en caché antes de destruirlo
+            const gridPaint = paintCache.get("grid");
+            if (gridPaint && !gridPaint.isDeleted()) {
+                gridPaint.setShader(null);
+            }
+            
+            // Destruir de forma segura
+            if (!oldShader.isDeleted()) {
+                oldShader.delete();
+            }
+        }
         shaderCache.delete("grid_gradient");
     }
     
@@ -691,7 +734,7 @@ export const drawExternalCursor = (x: number, y: number, color: string, name: st
         textStyle: textStyle,
         textAlign: CK.TextAlign.Left,
     });
-    const paragraph = getParagraph(CK, name, paragraphStyle, nodusCanvas.getFont()!);
+    const paragraph = getParagraph(CK, name, paragraphStyle, nodusCanvas.getFont()!, name);
     paragraph.layout(300 / scale);
     canvas.drawParagraph(paragraph, 12 / scale, 20 / scale);
 
@@ -733,6 +776,38 @@ export const drawPings = () => {
     });
 };
 
+
+export const drawSelectionRect = () => {
+    const CK = nodusCanvas.getCK();
+    const canvas = nodusCanvas.getCanvas();
+    const rect = CK.RRectXY(CK.LTRBRect(selectionRect.x0, selectionRect.y0, selectionRect.x1, selectionRect.y1), 0, 0);
+
+    const fillPaint = getPaint(CK, "selection_fill", (p) => p.setAntiAlias(true));
+    fillPaint.setColor(CK.Color(64,150,255, 0.3));
+    canvas.drawRRect(rect, fillPaint);
+
+    const strokePaint = getPaint(CK, "selection_stroke", (p) => {
+        p.setStyle(CK.PaintStyle.Stroke);
+        p.setStrokeWidth(1);
+        p.setAntiAlias(true);
+    });
+    strokePaint.setColor(CK.Color(64,150,255,0.8));
+    canvas.drawRRect(rect, strokePaint);
+};
+
+export const drawConnectionPoint = (CK: CanvasKit, canvas: Canvas, point: {x: number, y: number}, color: string = "#ffffff") => {
+    const fillPaint = getPaint(CK, `point_fill_${color}`, (p) => p.setStyle(CK.PaintStyle.Fill));
+    fillPaint.setColor(CK.parseColorString(color));
+    canvas.drawCircle(point.x, point.y, 5, fillPaint);
+
+    const strokePaint = getPaint(CK, "point_stroke", (p) => {
+        p.setStyle(CK.PaintStyle.Stroke);
+        p.setStrokeWidth(1);
+    });
+    strokePaint.setColor(CK.parseColorString("#000000"));
+    canvas.drawCircle(point.x, point.y, 5, strokePaint);
+};
+
 export const exportDiagramAsPng = async (_scale?: any) => {
 
     let scale = 0;
@@ -771,7 +846,7 @@ export const exportDiagramAsPng = async (_scale?: any) => {
     }
 
     const canvas = sufrace.getCanvas();
-    canvas.clear((userData.currentProjectProperties as any).backgroundColor ? CK.TRANSPARENT : CK.parseColorString((userData.currentProjectProperties as any).backgroundColor));
+    canvas.clear((userData.currentProjectProperties as any).backgroundColor ? CK.parseColorString((userData.currentProjectProperties as any).backgroundColor) : CK.TRANSPARENT);
     canvas.scale(realScale, realScale);
     canvas.translate(-bounds.x, -bounds.y);
 
@@ -819,33 +894,317 @@ export const exportDiagramAsPng = async (_scale?: any) => {
     sufrace.delete();
 };
 
-export const drawSelectionRect = () => {
-    const CK = nodusCanvas.getCK();
-    const canvas = nodusCanvas.getCanvas();
-    const rect = CK.RRectXY(CK.LTRBRect(selectionRect.x0, selectionRect.y0, selectionRect.x1, selectionRect.y1), 0, 0);
+export const exportDiagramAsSVG = async () => {
 
-    const fillPaint = getPaint(CK, "selection_fill", (p) => p.setAntiAlias(true));
-    fillPaint.setColor(CK.Color(64,150,255, 0.3));
-    canvas.drawRRect(rect, fillPaint);
+    const toastId = showToast("Generando SVG...", ToastType.PROCESSING);
 
-    const strokePaint = getPaint(CK, "selection_stroke", (p) => {
-        p.setStyle(CK.PaintStyle.Stroke);
-        p.setStrokeWidth(1);
-        p.setAntiAlias(true);
-    });
-    strokePaint.setColor(CK.Color(64,150,255,0.8));
-    canvas.drawRRect(rect, strokePaint);
-};
+    await new Promise(resolve => setTimeout(resolve, 50));
 
-export const drawConnectionPoint = (CK: CanvasKit, canvas: Canvas, point: {x: number, y: number}, color: string = "#ffffff") => {
-    const fillPaint = getPaint(CK, `point_fill_${color}`, (p) => p.setStyle(CK.PaintStyle.Fill));
-    fillPaint.setColor(CK.parseColorString(color));
-    canvas.drawCircle(point.x, point.y, 5, fillPaint);
+    try{
 
-    const strokePaint = getPaint(CK, "point_stroke", (p) => {
-        p.setStyle(CK.PaintStyle.Stroke);
-        p.setStrokeWidth(1);
-    });
-    strokePaint.setColor(CK.parseColorString("#000000"));
-    canvas.drawCircle(point.x, point.y, 5, strokePaint);
-};
+        const bounds = calculateDiagramBounds([...nodes]);
+        const margin = 50;
+        const width = bounds.width + margin*2;
+        const height = bounds.height + margin*2;
+        const bgColor = (userData.currentProjectProperties as any)?.backgroundColor || '#021830';
+
+        let svg = `<svg xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 ${width} ${height}" 
+            width="${width}" 
+            height="${height}"
+            style="background-color: ${bgColor}; font-family: 'Inter', sans-serif;"
+            >`;
+
+        const nodesNormalize = [...nodes].map(node => ({
+            ...node,
+            "x": node.x - bounds.x + margin,
+            "y": node.y - bounds.y + margin
+        }))
+
+        const getNormalizedNode = (id: string) => {
+            return nodesNormalize.find(n => n.id === id);
+        };
+        
+        // ----- 2. DIBUJAR NODOS (BLOQUEADOS) -----
+        nodesNormalize.filter(node => node.lock).forEach(node => {
+            svg += drawNodeSvg(node);
+        });
+
+        [...connections].forEach(conn => {
+            const fromNode = getNormalizedNode(conn.from);
+            const toNode = getNormalizedNode(conn.to);
+
+            if(!fromNode || !toNode) return;
+
+            const pathData = getConnectionPathData(fromNode, toNode, conn);
+            const d = getSVGPathFromConnectionData(pathData);
+
+            const color = conn.properties?.color || fromNode.color;
+            const thickness = conn.properties?.thickness || 2;
+            const dashed = conn.properties?.dashed ? `stroke-dasharray="8,4"` : '';
+
+            const opacity = 1;
+
+            svg += `
+                <path d="${d}" 
+                    stroke="${color}" 
+                    stroke-width="${thickness + 2}" 
+                    fill="none" 
+                    opacity="0.2"
+                    ${dashed}
+                />
+                <path d="${d}" 
+                    stroke="${color}" 
+                    stroke-width="${thickness}" 
+                    fill="none" 
+                    opacity="${opacity}"
+                    ${dashed}
+                />
+            `;
+
+            if (conn.properties?.label) {
+                const { start, end } = pathData;
+                const cx = (start.x + end.x) / 2 + margin;
+                const cy = (start.y + end.y) / 2 + margin;
+                const labelColor = conn.properties?.labelColor || '#ffffff';
+                const fontSize = conn.properties?.fontSize || 14;
+                const labelPosition = conn.properties?.labelPosition || 5;
+                
+                svg += `
+                    <text x="${cx}" y="${cy - labelPosition}" 
+                        fill="${labelColor}" 
+                        font-size="${fontSize}" 
+                        text-anchor="middle" 
+                        font-family="Inter, sans-serif"
+                    >${conn.properties.label}</text>
+                `;
+            }
+        });
+
+        
+        // ----- 3. DIBUJAR NODOS (NO BLOQUEADOS) -----
+        nodesNormalize.filter(node => !node.lock).forEach(node => {
+            svg += drawNodeSvg(node);
+        });
+        
+        svg += `</svg>`;
+
+        // Descargar
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${userData.currentProjectName || 'nodus_flow'}_diagram.svg`;
+        link.click();
+        URL.revokeObjectURL(url);
+        
+        removeToast(toastId);
+        showToast(`SVG exportado! (${nodes.length} nodos, ${connections.length} conexiones)`, ToastType.SUCCES);
+        
+    } catch (error) {
+        removeToast(toastId);
+        console.error("SVG Export error:", error);
+        showToast(`Error al exportar SVG: ${error}`, ToastType.ERROR);
+    }
+
+}
+
+// ----- FUNCIÓN AUXILIAR PARA DIBUJAR NODO EN SVG -----
+function drawNodeSvg(node: Node): string {
+    const x = node.x;
+    const y = node.y;
+    const w = node.width;
+    const h = node.height;
+    const color = node.color;
+    const opacity = node.opacity || 1;
+    const radius = node.radius || 8;
+    const title = node.title || "";
+    const fontSize = node.properties?.fontSize || 15;
+    const textColor = obtenerColorTexto(color);
+    
+    let shape = '';
+    const style = node.style || 1;
+    
+    // Borde con estilo (dashed, double, etc.)
+    const borderWidth = node.properties?.borderWidth || 2;
+    const dashedBorder = node.properties?.dashedBorder;
+    const doubleBorder = node.properties?.doubleBorder;
+    
+    // Cuerpo del nodo
+    if (style === 2) {
+        // Elipse
+        shape = `<ellipse cx="${x + w/2}" cy="${y + h/2}" rx="${w/2}" ry="${h/2}" 
+            fill="${color}" opacity="${opacity}"/>`;
+    } else if (style === 3) {
+        // Diamante
+        shape = `<polygon points="${x + w/2},${y} ${x + w},${y + h/2} ${x + w/2},${y + h} ${x},${y + h/2}" 
+            fill="${color}" opacity="${opacity}"/>`;
+    } else {
+        // Rectángulo redondeado (default)
+        shape = `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" ry="${radius}" 
+            fill="${color}" opacity="${opacity}"/>`;
+    }
+    
+    let result = shape;
+    
+    // Borde punteado (dashedBorder)
+    if (dashedBorder) {
+        const dash = parseInt(dashedBorder) || 3;
+        // Dibujar un borde punteado encima
+        if (style === 1) {
+            result += `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" ry="${radius}" 
+                fill="none" stroke="${color}" stroke-width="${borderWidth + 1}" 
+                stroke-dasharray="${dash},${dash}" opacity="${opacity}"/>`;
+        } else if (style === 2) {
+            result += `<ellipse cx="${x + w/2}" cy="${y + h/2}" rx="${w/2}" ry="${h/2}" 
+                fill="none" stroke="${color}" stroke-width="${borderWidth + 1}" 
+                stroke-dasharray="${dash},${dash}" opacity="${opacity}"/>`;
+        }
+    }
+    
+    // Doble borde
+    if (doubleBorder && !dashedBorder) {
+        if (style === 1) {
+            result += `<rect x="${x - 6}" y="${y - 6}" width="${w + 12}" height="${h + 12}" 
+                rx="${radius + 6}" ry="${radius + 6}" 
+                fill="none" stroke="${color}" stroke-width="3" opacity="${opacity}"/>`;
+        } else if (style === 2) {
+            result += `<ellipse cx="${x + w/2}" cy="${y + h/2}" rx="${w/2 + 6}" ry="${h/2 + 6}" 
+                fill="none" stroke="${color}" stroke-width="3" opacity="${opacity}"/>`;
+        }
+    }
+    
+    const textMaxWidth = w - 20; // 10px de padding a cada lado
+    
+    if (title) {
+        const textY = y + (h / 2);
+        
+        result += renderTextToSvg(
+            title,
+            x + w / 2,        // <-- Centro del nodo
+            textY,            // <-- Centro vertical del nodo
+            textMaxWidth,
+            fontSize,
+            textColor,
+            "center",         // <-- Centrado horizontal
+            "Inter, sans-serif",
+            node.properties?.underline ? 'text-decoration="underline"' : ''
+        );
+    }
+    
+    // ----- TEXTOS OPCIONALES -----
+    
+    // Text Above: centrado sobre el nodo
+    if (node.properties?.textAbove) {
+        const aboveFontSize = node.properties.textAboveFontSize || 12;
+        const aboveColor = node.properties.textAboveColor || color;
+        const aboveMaxWidth = w;
+        const aboveLayout = estimateTextLayout(node.properties.textAbove, aboveMaxWidth, aboveFontSize);
+        const aboveHeight = aboveLayout.height || aboveFontSize;
+        const aboveY = y - 8 - aboveHeight / 2;  // Centrado verticalmente sobre el nodo
+        
+        result += renderTextToSvg(
+            node.properties.textAbove,
+            x + w / 2,        // <-- Centro del nodo
+            aboveY,           // <-- Centro vertical del texto
+            aboveMaxWidth,
+            aboveFontSize,
+            aboveColor,
+            "center"          // <-- Centrado horizontal
+        );
+    }
+    
+    // Text Below: centrado bajo el nodo
+    if (node.properties?.textBelow) {
+        const belowFontSize = node.properties.textBelowFontSize || 12;
+        const belowColor = node.properties.textBelowColor || color;
+        const belowMaxWidth = w;
+        const belowLayout = estimateTextLayout(node.properties.textBelow, belowMaxWidth, belowFontSize);
+        const belowHeight = belowLayout.height || belowFontSize;
+        const belowY = y + h + 8 + belowHeight / 2;  // Centrado verticalmente bajo el nodo
+        
+        result += renderTextToSvg(
+            node.properties.textBelow,
+            x + w / 2,        // <-- Centro del nodo
+            belowY,           // <-- Centro vertical del texto
+            belowMaxWidth,
+            belowFontSize,
+            belowColor,
+            "center"          // <-- Centrado horizontal
+        );
+    }
+    
+    // Text Left: alineado a la derecha, centrado verticalmente
+    if (node.properties?.textLeft) {
+        const leftFontSize = node.properties.textLeftFontSize || 12;
+        const leftColor = node.properties.textLeftColor || color;
+        const leftMaxWidth = 200;
+        const leftX = x - 8;                    // <-- Borde derecho del texto (text-anchor="end")
+        const leftY = y + h / 2;                // <-- Centro vertical del nodo
+        
+        result += renderTextToSvg(
+            node.properties.textLeft,
+            leftX,            // <-- Borde derecho del texto
+            leftY,            // <-- Centro vertical
+            leftMaxWidth,
+            leftFontSize,
+            leftColor,
+            "right"           // <-- Alineado a la derecha (text-anchor="end")
+        );
+    }
+    
+    // Text Right: alineado a la izquierda, centrado verticalmente
+    if (node.properties?.textRight) {
+        const rightFontSize = node.properties.textRightFontSize || 12;
+        const rightColor = node.properties.textRightColor || color;
+        const rightMaxWidth = 200;
+        const rightX = x + w + 8;               // <-- Borde izquierdo del texto (text-anchor="start")
+        const rightY = y + h / 2;               // <-- Centro vertical del nodo
+        
+        result += renderTextToSvg(
+            node.properties.textRight,
+            rightX,           // <-- Borde izquierdo del texto
+            rightY,           // <-- Centro vertical
+            rightMaxWidth,
+            rightFontSize,
+            rightColor,
+            "left"            // <-- Alineado a la izquierda (text-anchor="start")
+        );
+    }
+    
+    // ----- MEMBERSHIPS (E/R) - Versión mejorada -----
+    if (node.properties?.disjointMembership) {
+        const cx = node.x + node.width / 2;
+        const bottomY = node.y + node.height;
+        const arcStartX = node.x - 60;
+        const arcEndX = node.x + node.width + 60;
+        
+        // Arco semicircular
+        result += `
+            <path d="M ${arcStartX} ${bottomY + 40} 
+                Q ${cx} ${bottomY + 100} ${arcEndX} ${bottomY + 40}" 
+                fill="none" 
+                stroke="${color}" 
+                stroke-width="2"
+            />
+        `;
+    }
+
+    if (node.properties?.overlappingMembership) {
+        const bottomY = node.y + node.height;
+        const lineStartX = node.x - 60;
+        const lineEndX = node.x + node.width + 60;
+        
+        // Línea punteada horizontal
+        result += `
+            <line x1="${lineStartX}" y1="${bottomY + 40}" 
+                x2="${lineEndX}" y2="${bottomY + 40}" 
+                stroke="${color}" 
+                stroke-width="2.5" 
+                stroke-dasharray="6,4"
+            />
+        `;
+    }
+
+    return result;
+}

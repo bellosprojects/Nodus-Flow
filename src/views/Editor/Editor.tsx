@@ -1,11 +1,11 @@
 import { Properties } from "./components/Properties";
-import { LEFT_TOOLBAR, USERS_PANEL, PROJECT_NAME, TOOL_BELT, LAYERS_PANEL, TOP_BUTTONS } from "./components/Toolbars";
+import { CURRENT_POSITION, LAST_ACTIONS, LEFT_TOOLBAR, TOOL_BELT } from "./components/Toolbars";
 import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupar, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
 import { lerp } from "../../utils/math";
 import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
 import { addConnection, connections, setConnections, setSelectedConnectionId, addConnectionProperty, changeConnectionStyle } from "../../models/connections";
 import { moveNodeThrottle, wsService } from "../../core/socket";
-import { createEffect, createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
 
 import { 
@@ -31,10 +31,9 @@ import "../../App.css";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import styles from "./Editor.module.css";
-import { addCurrentProjectProperty, updateCurrentProjectName, userData } from "../../models/userStore";
-import { COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette";
-import { activeUsers, setActiveUsers } from "../../models/users";
+import { userData } from "../../models/userStore";
+import { COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette/CommandPalette";
+import { activeUsers, setActiveUsers, useUser } from "../../models/users";
 import { ToastContainer } from "../components/ToastContainer";
 import { showToast } from "../../models/toast";
 import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../../utils/keyboard";
@@ -51,13 +50,13 @@ import {
     startAutosaveTimer,
     stopAutosaveTimer,
     saveOnClose,
-    getLatestAutosave,
-    restoreAutosave,
     cleanOldAutosaves
 } from "../../core/autosave";
 
-import { ConfigPanel } from "./components/ConfiguracionPanel";
-import { AutosavePanel } from "./components/AutosavePanel";
+import { ConfigPanel } from "./components/ConfigPanel/ConfiguracionPanel";
+import { AutosavePanel } from "./components/AutosavePanel/AutosavePanel";
+import { EDITOR_HEADER } from "./components/Header/Header";
+import { LAYERS_PANEL } from "./components/LayersPanel/LayersPanel";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
@@ -79,6 +78,7 @@ export let flowConecctions = 0;
 
 export let selectionRect = { x0: 0, y0: 0, x1: 0, y1: 0};
 export let mousePos = { x: 0, y: 0};
+export const [exportedMousePos, setExportedMousePos] = createSignal({x:0, y:0});
 
 let viewportBounds = {x: 0, y: 0, width: 0, height: 0};
 let lastViewportUpdate = 0;
@@ -240,12 +240,13 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     const handleMouseMove = (e : MouseEvent) => {
 
         mousePos = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
+        setExportedMousePos({x: mousePos.x, y: mousePos.y});
 
         wsService.sendEvent({
             tipo: "mover_cursor",
             x: mousePos.x,
             y: mousePos.y,
-            nombre: userData.name
+            nombre: useUser().name()
         }, false);
 
         nodusCanvas.requestRedraw();
@@ -445,7 +446,9 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         try {
 
             window.addEventListener('wheel', (e) => {
-                e.preventDefault();
+
+                if(e.target !== nodusCanvas.canvasRef) return;
+
                 const ZOOM_SPEED = 0.0008;
                 const delta = -e.deltaY;
                 const oldScale = nodusCanvas.camera.zoom();
@@ -473,7 +476,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 }
                 
                 // Cache de nodos visibles para evitar filtrados repetitivos
-                const visibleNodes = nodes.filter(node => isNodeVisible(node));
+                const visibleNodes = [...nodes].filter(node => isNodeVisible(node));
                 const lockedNodes = visibleNodes.filter(node => node.lock);
                 const unlockedNodes = visibleNodes.filter(node => !node.lock);
                 
@@ -482,6 +485,28 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     const dragged = draggedNode();
                     if(dragged && isNodeVisible(dragged)){
                         drawGrid({x: dragged.x + dragged.width / 2, y: dragged.y + dragged.height / 2});
+                    }
+                }
+
+                for (const node of nodes) {
+                    if (node.targetX !== undefined && node.targetY !== undefined) {
+                        const dx = node.targetX - node.x;
+                        const dy = node.targetY - node.y;
+                        const distance = Math.sqrt(dx*dx + dy*dy);
+                        if (distance < 0.5) {
+                            // Fijar posición exacta y limpiar targets
+                            setNodes(n => n.id === node.id, {
+                                x: node.targetX,
+                                y: node.targetY,
+                                targetX: undefined,
+                                targetY: undefined
+                            });
+                        } else {
+                            // Interpolar suavemente (factor 0.15 es típico)
+                            const newX = node.x + dx * 0.05;
+                            const newY = node.y + dy * 0.05;
+                            setNodes(n => n.id === node.id, { x: newX, y: newY });
+                        }
                     }
                 }
                 
@@ -552,7 +577,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 drawPings();
                 
                 activeUsers.forEach(user => {
-                    if(user.nombre == userData.name) return;
+                    if(user.nombre == useUser().name()) return;
                     
                     if(user.targetX !== undefined){
                         setActiveUsers(u => u.nombre === user.nombre, {x: lerp(user.x, user.targetX, 0.15)});
@@ -572,7 +597,12 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 flowConecctions += 0.015;
                 if(flowConecctions > 1) flowConecctions = 0;
             }
+
+            console.log("[Editor] Setting draw function");
             nodusCanvas.setDraw(draw);
+
+            console.log("[Editor] Requesting redraw");
+            nodusCanvas.requestRedraw();
         
         } catch (error) {
             console.error('Error initializing CanvasKit:', error);
@@ -597,30 +627,18 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             offsetY: nodusCanvas.camera.offsetY()
         }));
 
-        const latestAutosave = getLatestAutosave();
-        if(latestAutosave && latestAutosave.timestamp > Date.now() - 24 * 60 * 60 * 1000) {
-            const ageMinutes = Math.round((Date.now() - latestAutosave.timestamp) / (1000 * 60));
-            const shuoldRestore = window.confirm(
-                `Se encontro un autoguardado de hace ${ageMinutes} minutos. \n Queres restaurarlo? (Selecciona "Cancelar" paa usar el estado actual del servidor)`
-            );
-
-            if(shuoldRestore){
-                restoreAutosave(latestAutosave, (data) => {
-                    setNodes(data.nodes);
-                    setConnections(data.connections);
-                    if (data.projectName) updateCurrentProjectName(data.projectName, false);
-                    Object.entries(data.projectProperties || {}).forEach(([KeyboardEvent, value]) => {
-                        addCurrentProjectProperty(KeyboardEvent, value);
-                    });
-
-                    if(data.cameraState){
-                        nodusCanvas.camera.setZoom(data.cameraState.zoom);
-                        nodusCanvas.camera.setOffsetX(data.cameraState.offsetX);
-                        nodusCanvas.camera.setOffsetY(data.cameraState.offsetY);
-                    }
-                });
-            }
+        if (!isFinite(nodusCanvas.camera.zoom()) || !isFinite(nodusCanvas.camera.offsetX())) {
+            nodusCanvas.camera.setZoom(1);
+            nodusCanvas.camera.setOffsetX(0);
+            nodusCanvas.camera.setOffsetY(0);
         }
+
+        // 2. Intentar enfocar el diagrama si ya hay nodos cargados, de lo contrario se ejecutará el fallback seguro
+        setTimeout(() => {
+            // Le damos 50ms para que SolidJS pinte los primeros elementos en el árbol reactivo
+            nodusCanvas.camera.centerCameraNow();
+            nodusCanvas.requestRedraw();
+        }, 50);
 
         onCleanup(() => {
             
@@ -646,7 +664,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     });
 
     const appWindow = getCurrentWindow();
-    appWindow.setTitle(`Nodus Flow - ${userData.name}`);
+    appWindow.setTitle(`Nodus Flow - ${useUser().name()}`);
 
     async function onFullScrren(){
         const isFullScreen = await appWindow.isFullscreen();
@@ -755,30 +773,27 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     return (
         <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden", "pointer-events": "none" }}>
 
-            <div class={styles.topRightToolbar}>
-                { USERS_PANEL() }
+            { EDITOR_HEADER(handleShare) }
 
-                { TOP_BUTTONS(handleShare) }
-            </div>
+            <Show when={isCommandPaletteOpen()}>
+                {COMMAND_PALETTE()}
+            </Show>
 
-            { LEFT_TOOLBAR(onFullScrren, onHome) }
+            <Show when={!isCommandPaletteOpen()}>
+                { LEFT_TOOLBAR(onFullScrren, onHome) }
+            </Show>
+
 
             { Properties() }
 
-            <div class={styles.topPanel}>
-                <Switch>
-                    <Match when={isCommandPaletteOpen()}>
-                        { COMMAND_PALETTE() }
-                    </Match>
-                    <Match when={!isCommandPaletteOpen()}>
-                        { PROJECT_NAME() }
-                    </Match>
-                </Switch>
-            </div>
 
             { TOOL_BELT() }
 
             { LAYERS_PANEL() }
+
+            { LAST_ACTIONS() }
+
+            { CURRENT_POSITION() }
 
             { ConfigPanel() }
 

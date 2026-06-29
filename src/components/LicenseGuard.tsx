@@ -14,49 +14,69 @@ export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
     expiryDate, 
     isLoading,
     checkLicense,
-    deviceId
+    deviceId,
+    supportMail
   } = useLicense();
-  
+
+  // Leer versión desde Vite (o usar default)
+  const appVersion = import.meta.env.VITE_APP_VERSION || '1.0.0';
+
+  // Icono SVG de candado (reemplaza 🔒)
+  const LockIcon = () => (
+    <svg class="license-icon" viewBox="0 0 24 24">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+
   return (
     <>
+      {/* Estado de carga */}
       <Show when={isLoading()}>
         <div class="license-loading">
           <div class="spinner"></div>
-          <p>Verificando licencia...</p>
+          <p>Verifying license...</p>
         </div>
       </Show>
       
+      {/* Licencia inválida / expirada */}
       <Show when={!isLoading() && !licenseValid()}>
         <div class="license-expired">
           <div class="license-card">
-            <div class="license-icon">🔒</div>
-            <h2>Acceso Restringido</h2>
-            <p>{licenseMessage()}</p>
+            <LockIcon />
+            <h2>Access Restricted</h2>
+            <p class="message">{licenseMessage()}</p>
             
             <Show when={expiryDate()}>
               <div class="expiry-info">
-                <span>Fecha de expiración:</span>
-                <strong>{expiryDate()?.toLocaleDateString('es-ES')}</strong>
+                <span>Expiration date:</span>
+                <strong>{expiryDate()?.toLocaleDateString('en-US')}</strong>
               </div>
             </Show>
             
             <div class="contact-info">
-              <p>Si necesitas más tiempo, contacta al administrador:</p>
-              <a href="mailto:bello.angel1505@gmail.com">bello.angel1505@gmail.com</a>
+              <p>If you need more time, contact the administrator:</p>
+              <a href={`mailto:${supportMail}`}>{supportMail}</a>
             </div>
             
             <button onClick={() => checkLicense()} class="retry-button">
-              Reintentar
+              Retry
             </button>
 
             <Show when={deviceId()}>
-                <p style="margin-top: 50px;">Dispositivo ID: {deviceId()}</p>
+              <div class="device-id">Device ID: {deviceId()}</div>
             </Show>
 
+            {/* Footer de la app */}
+            <div class="app-footer">
+              <span>Nodus Flow v{appVersion}</span>
+              <span class="company"> | Bello's Projects</span>
+            </div>
           </div>
         </div>
       </Show>
       
+      {/* Licencia válida -> renderizar hijos */}
       <Show when={!isLoading() && licenseValid() === true}>
         {props.children}
       </Show>

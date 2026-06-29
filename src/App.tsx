@@ -1,5 +1,5 @@
 import { Lobby } from "./views/Lobby/Lobby";
-import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
+import { createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { Editor } from "./views/Editor/Editor";
 import { nodusCanvas } from "./core/NodusCanvas";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -9,6 +9,9 @@ import { initializeGlobalKeyboardEvents, removeGlobalKeyboardEvents } from "./ut
 import "./App.css";
 import "./index.css";
 import { LicenseGuard } from "./components/LicenseGuard";
+import { Login } from "./views/Auth/Login";
+import { Signup } from "./views/Auth/Singup";
+import { authStore } from "./models/authStore";
 
 const startView : 'lobby' | 'editor' = 'lobby';
 
@@ -19,14 +22,12 @@ function NodusFlowApp() {
 
     onMount(async () => {
         if(canvasRef){
-            initializeGlobalKeyboardEvents();
 
             await nodusCanvas.init(canvasRef);
             
             onCleanup(() => {
                 nodusCanvas.destroy();
 
-                removeGlobalKeyboardEvents();
             });
         }
     });
@@ -75,14 +76,46 @@ function NodusFlowApp() {
     );
 }
 
-function App() {
+function AuthRouter() {
+    const [showSignup, setShowSignup] = createSignal(false);
+
+    const handleLoginSuccess = () => {
+        // La app se mostrará automáticamente porque isAuthenticated cambió
+    };
 
     return (
-        <LicenseGuard>
-            <NodusFlowApp />
-        </LicenseGuard>
-    )
+        <Show when={!showSignup()} fallback={
+            <Signup 
+                onSuccess={() => setShowSignup(false)} 
+                onSwitchToLogin={() => setShowSignup(false)} 
+            />
+        }>
+            <Login 
+                onSuccess={handleLoginSuccess} 
+                onSwitchToSignup={() => setShowSignup(true)}
+            />
+        </Show>
+    );
+}
 
+function App() {
+    const isAuthenticated = createMemo(() => authStore.isAuthenticated);
+
+    onMount(() => {
+        initializeGlobalKeyboardEvents();
+    });
+
+    onCleanup(() => {
+        removeGlobalKeyboardEvents();
+    })
+
+    return (
+        <Show when={isAuthenticated()} fallback={<AuthRouter />}>
+            <LicenseGuard>
+                <NodusFlowApp />
+            </LicenseGuard>
+        </Show>
+    );
 }
 
 export default App;

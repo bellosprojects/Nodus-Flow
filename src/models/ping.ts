@@ -3,6 +3,7 @@ import { userData } from "./userStore";
 import { nodusCanvas } from "../core/NodusCanvas";
 import { showToast, ToastType } from "./toast";
 import { wsService } from "../core/socket";
+import { useUser } from "./users";
 
 export interface Ping {
     id: string,
@@ -50,7 +51,7 @@ export const addPing = (x:number, y: number, color: string, name: string, send =
             x: x,
             y: y,
             color: color,
-            nombre: userData.name
+            nombre: useUser().name()
         });
     }
 };

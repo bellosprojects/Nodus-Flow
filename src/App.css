@@ -21,17 +21,7 @@ h1 {
   margin-left: 10px;
   text-shadow: 0 0 10px rgba(0,255,200, 0.7);
   font-weight: normal;
-  animation: pulse 1.5s ease-in infinite;
   font-size: 20px;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
 }
 
 .glass-panel {
@@ -68,13 +58,6 @@ h1 {
   align-items: center;
 }
 
-.separator {
-  height: 1px;
-  width: calc(100% - 8px);
-  background: rgba(255,255,255,0.2);
-  margin: 0 5px;
-}
-
 .prop-section label {
   font-size: 15px;
   color: #C8C8C8;
@@ -86,10 +69,10 @@ h1 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
 .input-group {
+  margin-bottom: 8px;
   margin-top: 5px;
   display: flex;
   background: rgba(255,255,255,0.08);
@@ -97,6 +80,7 @@ h1 {
   padding: 4px 8px;
   border: 1px solid rgba(255,255,255,0.05);
   align-items: center;
+  overflow: hidden;
 }
 
 .input-group input {
@@ -117,22 +101,12 @@ h1 {
   font-weight: bold;
 }
 
-.color-picker-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(0,0,0,0.3);
-  padding: 8px;
-  border-radius: 8px;
-}
-
 input[type="color"] {
   border: none;
-  height: 30px;
+  height: 36px;
   cursor: pointer;
-  background: transparent;
-  border-radius: 10px;
-  margin: 0;
+  width: calc(100% + 24px);
+  margin: -10px -12px;
 }
 
 .property-title{
@@ -147,20 +121,4 @@ input[type="color"] {
   font-size: 14px;
   margin-left: 5px;
   margin-bottom: 8px;
-}
-.square {
-  width: 22px;
-  height: 22px;
-  border-radius: 8px;
-  border: 1px solid #ffffff70;
-  background-color: #f0f0f020;
-  cursor: pointer;
-  transition: all 0.15s ease-out;
-
-}
-
-.square:hover{
-  scale: 1.05;
-  box-shadow: 0px 0px 6px rgb(112, 200, 200);
-  border: 1px solid white;
 }

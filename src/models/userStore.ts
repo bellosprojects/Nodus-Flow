@@ -5,23 +5,17 @@ import { connections } from "./connections";
 import { showToast, ToastType } from "./toast";
 
 
-const savedName = localStorage.getItem("nodus_username") || "";
 const roomId = localStorage.getItem("nodus_room_id") || "0000000000";
 const lastUsedRoom = localStorage.getItem("last_used_room") || "";
 
 const [userData, setUserData] = createStore({
-    name: savedName,
     roomId: roomId,
     lastRoom: lastUsedRoom,
     currentProjectName: '',
     oldProjectName: '',
-    currentProjectProperties: {}
+    currentProjectProperties: {} as Record<string, any>
 });
 
-export const updateUserName = (newName: string) => {
-    setUserData("name", newName);
-    localStorage.setItem("nodus_username", newName);
-};
 
 export const updateRoomId = (newRoomId: string) => {
     setUserData("roomId", newRoomId);
@@ -42,9 +36,9 @@ export const updateCurrentProjectName = (newProjectName: string, send = true) =>
         'tipo': 'cambiar_nombre_proyecto',
         'nombre': newProjectName
     });
-}
+};
 
-export const addCurrentProjectProperty = (propertyName: string, propertyValue: any) => {
+export const addCurrentProjectProperty = (propertyName: string, propertyValue: any, send = true) => {
 
     const properties = {
         ...userData.currentProjectProperties,
@@ -53,7 +47,34 @@ export const addCurrentProjectProperty = (propertyName: string, propertyValue: a
 
     setUserData("currentProjectProperties", properties);
 
-}
+    if(send){
+        wsService.sendEvent({
+            'tipo': 'cambiar_proyecto_property',
+            'propertyName': propertyName,
+            'propertyValue': propertyValue
+        });
+    }
+
+};
+
+export const deleteCurrentProjectProperty = (propertyName: string, send = true) => {
+
+    const properties = {
+        ...userData.currentProjectProperties,
+        [propertyName]: undefined
+    };
+
+    setUserData("currentProjectProperties", properties);
+
+    console.log("Nuevas propiedades:", userData.currentProjectProperties);
+
+    if(send){
+        wsService.sendEvent({
+            'tipo': 'deletear_proyecto_property',
+            'propertyName': propertyName
+        });
+    }
+};
 
 export { userData, setUserData };
 

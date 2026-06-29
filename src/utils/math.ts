@@ -10,3 +10,21 @@ export const snapPoint = (x: number, y : number) => ({
 });
 
 export const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor;
+
+const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
+const longitud = 12;
+
+export const generarUUID = () => {
+    
+    const array = new Uint8Array(longitud);
+
+    crypto.getRandomValues(array);
+
+    let id = '';
+
+    for(let i=0; i<array.length; i++){
+        id += caracteres[array[i] % caracteres.length];
+    }
+
+    return id;
+}

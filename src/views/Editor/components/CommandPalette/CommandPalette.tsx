@@ -1,14 +1,15 @@
-import styles from "../Editor.module.css";
-import { mouseDisabled, setIsCommandPaletteOpen  } from "../Editor";
+import styles from "./CommandPalette.module.css";
+import { mouseDisabled, setIsCommandPaletteOpen  } from "../../Editor";
 
-import searchIco from "../../../assets/search.svg";
+import searchIco from "../../../../assets/search.svg";
 import { Accessor, createEffect, createMemo, createSignal, For } from "solid-js";
-import { jumpToNode, nodes } from "../../../models/nodes";
-import { exportDiagramAsPng } from "../../../core/renderer";
-import { exportAsJson } from "../../../models/userStore";
-import { nodusCanvas } from "../../../core/NodusCanvas";
-import { calculateDiagramBounds } from "../../../utils/path";
-import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery } from "../../../utils/commands";
+import { jumpToNode, nodes } from "../../../../models/nodes";
+import { exportDiagramAsPng, exportDiagramAsSVG } from "../../../../core/renderer";
+import { exportAsJson } from "../../../../models/userStore";
+import { nodusCanvas } from "../../../../core/NodusCanvas";
+import { calculateDiagramBounds } from "../../../../utils/path";
+import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate } from "../../../../utils/commands";
+import { connections, setSelectedConnectionId } from "../../../../models/connections";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);
 export const [searchQuery, setSearchQuery] = createSignal("");
@@ -24,8 +25,10 @@ export type OmniItem = {
 
 enum CommandID {
     ExportPng = "EXPORT_PNG",
+    ExportSvg = "EXPORT_SVG",
     ExportJson = "EXPORT_JSON",
     ImportJson = "IMPORT_JSON",
+    GenerateMR = "GENERATE_MR",
     DelSelectedNodes = "DEL_SELECTED_NODES",
     DelAllConnections = "DEL_ALL_CONNECTIONS",
     DelAllNodes = "DEL_ALL_NODES",
@@ -53,6 +56,11 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
         action: (arg?: string) => exportDiagramAsPng(arg),
         color: "#977e2c"
     },
+    [CommandID.ExportSvg]: {
+        label: 'Export: SVG',
+        action: (_?: string) => exportDiagramAsSVG(),
+        color: "#c99cb5"
+    },
     [CommandID.ExportJson]: {
         label: 'Export: JSON',
         action: (_?: string) => exportAsJson(),
@@ -64,6 +72,14 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
             importFromQuery();
         },
         color: "#2c977e"
+    },
+    [CommandID.GenerateMR]: {
+        label: 'Generate: ',
+        action: (arg?: string) => {
+            generate(arg);
+        },
+        color: "#743d2f",
+        argPlaceholder: "MR2ER"
     },
     [CommandID.DelSelectedNodes]: {
         label: 'Delete: Selected Nodes',
@@ -122,35 +138,35 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
     [CommandID.LockAll]: {
         label: 'Lock All nodes',
         action: (_?: string) => {
-            import("../../../core/actions").then(({ actionLockAllNodes }) => actionLockAllNodes());
+            import("../../../../core/actions").then(({ actionLockAllNodes }) => actionLockAllNodes());
         },
         color: "#252421"
     },
     [CommandID.UnLockAll]: {
         label: 'Unlock All nodes',
         action: (_?: string) => {
-            import("../../../core/actions").then(({ actionUnlockAllNodes }) => actionUnlockAllNodes());
+            import("../../../../core/actions").then(({ actionUnlockAllNodes }) => actionUnlockAllNodes());
         },
         color: "#1a610c"
     },
     [CommandID.Deseclect]: {
         label: 'Select: None',
         action: (_?: string) => {
-            import("../../../core/actions").then(({ actionSelectNone }) => actionSelectNone());
+            import("../../../../core/actions").then(({ actionSelectNone }) => actionSelectNone());
         },
         color: "#7c7c7c38"
     },
     [CommandID.SelectAll]: {
         label: 'Select: All',
         action: (_?: string) => {
-            import("../../../core/actions").then(({ actionSelectAll }) => actionSelectAll());
+            import("../../../../core/actions").then(({ actionSelectAll }) => actionSelectAll());
         },
         color: "#096894"
     },
     [CommandID.InverstSelect]: {
         label: 'Select: Invert',
         action: (_?: string) => {
-            import("../../../core/actions").then(({ actionInvertSelection }) => actionInvertSelection());
+            import("../../../../core/actions").then(({ actionInvertSelection }) => actionInvertSelection());
         },
         color: "#c796c9"
     },
@@ -251,13 +267,27 @@ export const filteredItems = createMemo(() => {
 
     const nodeItems: OmniItem[] = nodes.map(node => ({
         id: `node-${node.id}`,
-        label: `Go to: ${node.title || "Empty"} - ${node.id}`,
+        label: `${node.title || "Empty"} (${node.style === 1? "Square" : node.style === 2? "Ellipse" : "Diamond"})`,
         type: 'NODE',
         action: () => jumpToNode(node),
         color: node.color
     }));
 
-    return nodeItems.filter(item => item.label.toLowerCase().includes(q));
+    const connectionsItems: OmniItem[] = connections.map(conn => {
+
+        const fromNode = nodes.find(n => n.id === conn.from);
+        const toNode = nodes.find(n => n.id === conn.to);
+
+        return {
+            id: `conn-${conn.id}`,
+            label: `Go to: ${fromNode?.title || "Empty"} - ${toNode?.title || "Empty"}`,
+            type: 'NODE',
+            action: () => setSelectedConnectionId(conn.id),
+            color: "#8c0"
+        };
+    });
+
+    return nodeItems.filter(item => item.label.toLowerCase().includes(q)).concat(connectionsItems.filter(item => item.label.toLowerCase().includes(q)));
 });
 
 export const onSelectedItem = (item?: OmniItem) => {
@@ -297,6 +327,7 @@ export const COMMAND_PALETTE = () => {
                         placeholder="Search objects by name..."
                         value={searchQuery()}
                         onInput={(e) => setSearchQuery(e.currentTarget.value)}/>
+                <span class={styles.countResult}>{`${filteredItems().length} Results`}</span>
             </div>
 
             <div class={styles.searchResults}>

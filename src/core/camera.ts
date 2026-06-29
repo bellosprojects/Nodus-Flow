@@ -5,15 +5,48 @@ import { nodes } from "../models/nodes";
 
 export const createCameraStore = () => {
     
-    const [offsetX, setOffsetX] = createSignal(0);
-    const [offsetY, setOffsetY] = createSignal(0);
-    const [zoom, setZoom] = createSignal(1);
+    const [offsetX, _setOffsetX] = createSignal(0);
+    const [offsetY, _setOffsetY] = createSignal(0);
+    const [zoom, _setZoom] = createSignal(1);
+
+    // --- INTERCEPTORES SEGUROS ---
+    const setZoom = (value: number | ((prev: number) => number)) => {
+        const next = typeof value === 'function' ? value(zoom()) : value;
+        // Evitar NaN, Infinity, valores negativos o zooms absurdamente gigantes/pequeños
+        if (isNaN(next) || !isFinite(next) || next <= 0.05 || next > 15) {
+            console.warn("⚠️ Zoom extremo o inválido bloqueado:", next);
+            return;
+        }
+        _setZoom(next);
+    };
+
+    const setOffsetX = (value: number | ((prev: number) => number)) => {
+        const next = typeof value === 'function' ? value(offsetX()) : value;
+        if (isNaN(next) || !isFinite(next)) {
+            console.warn("⚠️ OffsetX inválido (NaN/Infinity) bloqueado");
+            return;
+        }
+        _setOffsetX(next);
+    };
+
+    const setOffsetY = (value: number | ((prev: number) => number)) => {
+        const next = typeof value === 'function' ? value(offsetY()) : value;
+        if (isNaN(next) || !isFinite(next)) {
+            console.warn("⚠️ OffsetY inválido (NaN/Infinity) bloqueado");
+            return;
+        }
+        _setOffsetY(next);
+    };
 
     const getDPR = () => Math.round(window.devicePixelRatio || 1);
 
     const centerOnPoint = (wordlX: number, wordlY: number) => {
-        const newOffsetX = - wordlX * zoom() + window.innerWidth / 2;
-        const newOffsetY = - wordlY * zoom() + window.innerHeight / 2;
+        const z = zoom();
+        // Validar que los puntos de entrada sean reales antes de operar
+        if (!isFinite(wordlX) || !isFinite(wordlY)) return;
+
+        const newOffsetX = - wordlX * z + window.innerWidth / 2;
+        const newOffsetY = - wordlY * z + window.innerHeight / 2;
 
         setOffsetX(newOffsetX);
         setOffsetY(newOffsetY);
@@ -30,10 +63,20 @@ export const createCameraStore = () => {
     }
 
     const applyToCanvas = (canvas: Canvas) => {
+    const z = zoom();
+    const x = offsetX();
+    const y = offsetY();
 
-        canvas.translate(offsetX(), offsetY());
-        canvas.scale(zoom(), zoom());
-    };
+    // Validar rigurosamente que los números sean reales y finitos
+    if (!isFinite(z) || z <= 0 || !isFinite(x) || !isFinite(y)) {
+        // Alerta en consola para que captures qué función del Editor está inyectando el NaN
+        console.warn("⚠️ Cámara con valores inválidos (NaN/Infinity) prevenida:", { z, x, y });
+        return; // Evita aplicar transformaciones corruptas al canvas
+    }
+
+    canvas.translate(x, y);
+    canvas.scale(z, z);
+}
 
     const screenToWordl = (screenX: number, screenY: number) => {
         return {
@@ -100,10 +143,31 @@ export const createCameraStore = () => {
     }
 
     const centerCameraNow = () => {
+        // Caso de seguridad: Si no hay nodos, no podemos enfocar nada. Ponemos valores por defecto seguros.
+        if (!nodes || nodes.length === 0) {
+            setOffsetX(0);
+            setOffsetY(0);
+            setZoom(1);
+            return;
+        }
+
         const bound = calculateDiagramBounds([...nodes]);
-        setZoom(Math.min(zoomToFit(bound.width, bound.height), 1));
+        
+        // Si los límites son inválidos o colapsados (0px)
+        if (bound.width <= 0 || bound.height <= 0 || !isFinite(bound.width) || !isFinite(bound.height)) {
+            setOffsetX(0);
+            setOffsetY(0);
+            setZoom(1);
+            return;
+        }
+
+        const fitZoom = zoomToFit(bound.width, bound.height);
+        setZoom(Math.min(fitZoom, 1));
+        
         const center = getDiagramCenter();
-        centerOnPoint(center.x, center.y);
+        if (isFinite(center.x) && isFinite(center.y)) {
+            centerOnPoint(center.x, center.y);
+        }
     }
 
     const getWordlSize = () => {

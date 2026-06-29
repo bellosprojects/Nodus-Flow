@@ -1,12 +1,12 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { nodes, selectedNodesIds, setSelectedNodesIds, deleteNode, selectedNodes } from "../models/nodes";
+import { nodes, selectedNodesIds, setSelectedNodesIds, selectedNodes } from "../models/nodes";
 import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
-import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette";
-import { activeUsers } from "../models/users";
-import { userData } from "../models/userStore";
+import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette/CommandPalette";
+import { activeUsers, useUser } from "../models/users";
 import { addPing } from "../models/ping";
 import { connectionsByNode } from "../models/connections";
 import { performRedo, performUndo } from "../core/history";
+import { actionDeleteSelectedNodes } from "../core/actions";
 
 async function fullScreenEvent(e: KeyboardEvent){
 
@@ -20,9 +20,7 @@ async function fullScreenEvent(e: KeyboardEvent){
 
 function deleteSelectedNodesEvent(e: KeyboardEvent){
     if(e.key === 'Delete'){
-        selectedNodesIds().forEach(nodeID => {
-            deleteNode(nodeID);
-        });
+        actionDeleteSelectedNodes();
     }
 }
 
@@ -45,8 +43,8 @@ function pingEvent(e: KeyboardEvent){
 
         if(isTyping) return;
 
-        const color = activeUsers.find(u => u.nombre === userData.name)!.color;
-        addPing(mousePos.x, mousePos.y, color, userData.name);
+        const color = activeUsers.find(u => u.nombre === useUser().name())!.color;
+        addPing(mousePos.x, mousePos.y, color, useUser().name());
     }
 }
 

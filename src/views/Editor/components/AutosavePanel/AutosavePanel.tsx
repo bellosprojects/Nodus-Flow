@@ -1,12 +1,12 @@
 // src/views/Editor/components/AutosavePanel.tsx
 import { For, createSignal, Show } from "solid-js";
-import { getAutosaveHistory, restoreAutosave, AutosaveData } from "../../../core/autosave";
-import { setNodes } from "../../../models/nodes";
-import { setConnections } from "../../../models/connections";
-import { updateCurrentProjectName, addCurrentProjectProperty } from "../../../models/userStore";
-import { nodusCanvas } from "../../../core/NodusCanvas";
-import styles from "../Editor.module.css";
-import { isAutosavePanelOpen } from "../Editor";
+import { getAutosaveHistory, restoreAutosave, AutosaveData } from "../../../../core/autosave";
+import { setNodes } from "../../../../models/nodes";
+import { setConnections } from "../../../../models/connections";
+import { updateCurrentProjectName, addCurrentProjectProperty } from "../../../../models/userStore";
+import { nodusCanvas } from "../../../../core/NodusCanvas";
+import styles from "./AutosavePanel.module.css";
+import { isAutosavePanelOpen } from "../../Editor";
 
 interface AutosavePanelProps {
     onClose: () => void;
@@ -62,7 +62,7 @@ export const AutosavePanel = (props: AutosavePanelProps) => {
             <div class={styles.autosaveOverlay} onClick={props.onClose}>
                 <div class={styles.autosavePanel} onClick={(e) => e.stopPropagation()}>
                     <div class={styles.autosaveHeader}>
-                        <h3>💾 Autoguardados</h3>
+                        <h3>Autoguardados</h3>
                         <button onClick={props.onClose} class={styles.closeBtn}>✕</button>
                     </div>
                     
@@ -82,16 +82,16 @@ export const AutosavePanel = (props: AutosavePanelProps) => {
                                 >
                                     <div class={styles.autosaveInfo}>
                                         <span class={styles.autosaveDate}>
-                                            📅 {formatDate(save.timestamp)}
+                                            {formatDate(save.timestamp)}
                                         </span>
                                         <span class={styles.autosaveAge}>
-                                            ⏱️ {getAgeText(save.timestamp)}
+                                            {getAgeText(save.timestamp)}
                                         </span>
                                     </div>
                                     <div class={styles.autosaveStats}>
-                                        <span>📦 {save.nodes.length} nodos</span>
-                                        <span>🔗 {save.connections.length} conexiones</span>
-                                        <span>📝 {save.projectName || "Sin nombre"}</span>
+                                        <span>{save.nodes.length} nodos</span>
+                                        <span>{save.connections.length} conexiones</span>
+                                        <span>{save.projectName || "Sin nombre"}</span>
                                     </div>
                                     <button 
                                         class={styles.restoreBtn}

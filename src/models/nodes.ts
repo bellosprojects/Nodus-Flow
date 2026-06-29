@@ -1,14 +1,14 @@
 import { createStore } from "solid-js/store";
-import { snapToGrid } from "../utils/math";
+import { generarUUID, snapToGrid } from "../utils/math";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import { connections, connectionsByNode, selectedConnectionId, setConnections, setSelectedConnectionId } from "./connections";
 import { nodusCanvas } from "../core/NodusCanvas";
 import {  setIsCommandPaletteOpen } from "../views/Editor/Editor";
-import { activeUsers } from "./users";
-import { userData } from "./userStore";
+import { activeUsers, useUser } from "./users";
 import { showToast, ToastType } from "./toast";
 import { calculateDiagramBounds } from "../utils/path";
 import { wsService } from "../core/socket";
+import { invalidateParagraphCache } from "../core/renderer";
 
 export interface Node {
     id: string,
@@ -49,7 +49,14 @@ createEffect(() => {
 
 export const showPropertiesPanel = createMemo(() => selectedNodes().length === 1 || selectedConnectionId() !== null);
 
-export const activeNode = createMemo(() => showPropertiesPanel()? selectedNodes()[0] : null);
+export const activeNode = createMemo(() => {
+    const ids = selectedNodesIds();
+    if (ids.length === 1) {
+        const found = nodes.find(n => n.id === ids[0]);
+        return found || null;
+    }
+    return null;
+});
 
 export const toolBeltPosition = createMemo(() => {
     const nodes = selectedNodes();
@@ -70,7 +77,7 @@ export const draggedNode = () => nodes.find(n => n.id === draggedNodeId());
 
 export const getNode = (id: string) => nodes.find(n => n.id === id);
 
-export const ocupadoPor = (id: string | null) => activeUsers.find(u => u.object === id && u.nombre !== userData.name);
+export const ocupadoPor = (id: string | null) => activeUsers.find(u => u.object === id && u.user_id !== useUser().id());
 
 export const ocupar = (id:string | null) => {
     if(ocupadoPor(id)){
@@ -92,7 +99,7 @@ export const ocupar = (id:string | null) => {
 
 export const addNode = (x: number, y : number, name? : string) => {
 
-    const newID = Math.random().toString(36).substring(6).toUpperCase();
+    const newID = generarUUID();
 
     const newNode: Node = {
         id: newID,
@@ -135,12 +142,12 @@ export const addNode = (x: number, y : number, name? : string) => {
     
 };
 
-export const copyNode = (id: string) => {
+export const copyNode = (id: string, forceNewId? : string) => {
     const currentNode = nodes.find(n => n.id === id);
 
     if(currentNode){
 
-        const newID = Math.random().toString(36).substring(6).toUpperCase();
+        const newID = forceNewId || generarUUID();
 
         const newNode : Node = {
             id: newID,
@@ -177,6 +184,7 @@ export const copyNode = (id: string) => {
             }
         });
 
+        return newID;
     }
 }
 
@@ -398,7 +406,7 @@ export const deleteNode = (id: string, send = true) => {
 }
 
 export const updateNodeRemote = (id: string, tx: number, ty: number) => {
-    setNodes(n => n.id === id, {targetX : tx, targetY: ty});
+    setNodes(n => n.id === id, {targetX : tx, targetY: ty, x: tx, y: ty});
 };
 
 export const updateNodeOpacity = (id:string, newOpacity: number, send = true) => {
@@ -483,10 +491,11 @@ export const unLockNode = (id: string, send = true) => {
     }
 }
 
-export const changeNodeStyle = (id: string, newStyle: number) => {
+export const changeNodeStyle = (id: string, newStyle: number, send = true) => {
 
     setNodes(n => n.id === id, "style", newStyle);
 
+    if(send)
     wsService.sendEvent({
         tipo: 'cambiar_estilo_nodo',
         id: id,
@@ -575,6 +584,9 @@ export const addNodeProperty = (id: string, propertyName: string, propertyValue:
         }
     }));
 
+    invalidateParagraphCache();
+    nodusCanvas.requestRedraw();
+
     if(send){
         wsService.sendEvent({
             tipo: "cambiar_nodo_property",
@@ -596,6 +608,9 @@ export const deleteNodeProperty = (id: string, propertyName: string, send = true
             properties: newProperties
         };
     });
+
+    invalidateParagraphCache();
+    nodusCanvas.requestRedraw();
 
     if(send){
         wsService.sendEvent({

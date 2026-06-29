@@ -145,6 +145,8 @@ import { startTransaction, commitTransaction, pushAction } from "../core/history
 import { setNodes, Node } from "../models/nodes";
 import { setConnections, Connection } from "../models/connections";
 import { wsService } from "../core/socket";
+import { generarUUID } from "./math";
+import { generateMRFromER } from "./MRFromER";
 
 export const importFromQuery = (_?: string) => {
     try {
@@ -187,7 +189,7 @@ export const importFromQuery = (_?: string) => {
                         
                         for (const nodeData of json.nodes) {
                             // Generar nuevo ID para evitar colisiones
-                            const newId = Math.random().toString(36).substring(6).toUpperCase();
+                            const newId = generarUUID();
                             const oldId = nodeData.id;
                             nodeIdMap.set(oldId, newId);
                             
@@ -410,4 +412,18 @@ export const invertSelectionFromCommand = () => {
     import("../core/actions").then(({ actionInvertSelection }) => {
         actionInvertSelection();
     });
+}
+
+export const generate = (query?: string) => {
+
+    if(!query) return;
+
+    const parts = query.trim().split(/\s+/);
+
+    const base = parts[0];
+
+    if(base === 'MR2ER'){
+        generateMRFromER();
+    }
+
 }

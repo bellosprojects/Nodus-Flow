@@ -1,44 +1,67 @@
-import { randomColor } from "../utils/color";
 import { throttle } from "../utils/network";
 import { eventHandlers } from "./socketHandlers";
 import { userData } from "../models/userStore";
 import { removeToast, showToast, ToastType } from "../models/toast";
+import { authStore } from "../models/authStore";
+import { randomColor } from "../utils/color";
+
+export let initToastId : number | null = null;
+
+export const resetToast = () => {
+    initToastId = null;
+}
 
 class WebSocketService {
 
     private socket : WebSocket | null = null;
     private reconnetAttemps = 0;
-    private maxReconnectAttemps = 5;
+    private maxReconnectAttemps = 10;
     private baseDelay = 1000;
     private offlineQueue: any[] = [];
     private pingIntervalId: any = null;
     private isIntencionallyClosed = false;
-    private confilctResolver: Map<string, number> = new Map();
-    private lastSyncTimestamp: number = 0;
+    private reconnectTimeoutId: any = null;
+    private isConnecting = false;
+    private toastId: number = -1;
 
-    public initSocket(){
-        if(this.socket && this.socket.readyState == WebSocket.OPEN) return;
+    public initSocket() {
 
+        initToastId = showToast("Cargando Sala", ToastType.PROCESSING);
+
+        // Evitar múltiples conexiones simultáneas
+        if (this.isConnecting) return;
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) return;
+        if (this.socket && this.socket.readyState === WebSocket.CONNECTING) return;
+
+        this.isConnecting = true;
         this.isIntencionallyClosed = false;
 
-        const URL_SOCKET = `wss://render-yqtz.onrender.com/ws/${userData.roomId}/${userData.name || "Anonymous"}`;
+        const token = authStore.token;
+        if (!token) {
+            console.error("No auth token, cannot connect WebSocket");
+            this.isConnecting = false;
+            return;
+        }
 
+        const URL_SOCKET = `wss://render-yqtz.onrender.com/ws/${userData.roomId}?token=${token}`;
         console.log(`[WS] Conectando a la sala ${userData.roomId}...`);
+        
         this.socket = new WebSocket(URL_SOCKET);
-
         this.setupEventListeners();
     }
 
-    private setupEventListeners(){
-
-        if(!this.socket) return;
+    private setupEventListeners() {
+        if (!this.socket) return;
 
         this.socket.addEventListener('open', () => {
-            console.log(`[WS] Conectado con exito`);
+            console.log(`[WS] Conectado con éxito`);
+            this.isConnecting = false;
             this.reconnetAttemps = 0;
-
-            if(this.reconnetAttemps > 0){
-                showToast("Conexion restablecida. Sincronizando...", ToastType.SUCCES);
+            
+            // Limpiar el timeout de reconexión si existe
+            if (this.reconnectTimeoutId) {
+                clearTimeout(this.reconnectTimeoutId);
+                this.reconnectTimeoutId = null;
             }
 
             this.sendEvent({
@@ -47,58 +70,60 @@ class WebSocketService {
             });
 
             this.flushOfflineQueue();
-
             this.startHeartbeat();
         });
 
         this.socket.addEventListener('message', (event) => {
-
             try {
-
                 const data = JSON.parse(event.data);
-
-                if(data.tipo === 'pong') return;
-
+                if (data.tipo === 'pong') return;
+                
                 const handler = eventHandlers[data.tipo];
-
-                if(handler){
+                if (handler) {
                     handler(data);
                 } else {
                     console.warn(`[WS] Evento no reconocido: ${data.tipo}`);
                 }
-
             } catch (e) {
-                console.error("[WS] Error procesando mensaje de socket: ", e);
+                console.error("[WS] Error procesando mensaje:", e);
             }
-
         });
 
         this.socket.addEventListener('close', (event) => {
-
             this.stopHeartbeat();
+            this.isConnecting = false;
+            
+            // Limpiar cualquier timeout pendiente
+            if (this.reconnectTimeoutId) {
+                clearTimeout(this.reconnectTimeoutId);
+                this.reconnectTimeoutId = null;
+            }
 
-            if(this.isIntencionallyClosed){
-                console.log("[WS] Desconexion intencional por el usuario");
+            if (this.isIntencionallyClosed) {
+                console.log("[WS] Desconexión intencional por el usuario");
+                this.offlineQueue = [];
                 return;
             }
 
-            console.warn(`[WS] Conexion cerrada. Codigo: ${event.code}. Razon: ${event.reason}`);
-            this.handleReconnect();
-
+            console.warn(`[WS] Conexión cerrada. Código: ${event.code}. Razón: ${event.reason}`);
+            
+            // Si es rate limiting, esperar más tiempo
+            const isRateLimit = event.reason?.includes("rate") || event.reason?.includes("Too many");
+            const delay = isRateLimit ? 5000 : Math.pow(2, this.reconnetAttemps) * this.baseDelay;
+            
+            this.handleReconnect(delay);
         });
 
         this.socket.addEventListener('error', (error) => {
-
-            console.error("[WS] Error en el socket: ", error);
-
+            console.error("[WS] Error en el socket:", error);
+            // No cerrar aquí, el evento 'close' manejará la reconexión
         });
-
     }
 
-    private handleReconnect() {
-        if(this.reconnetAttemps >= this.maxReconnectAttemps){
+    private handleReconnect(delay?: number) {
+        if (this.reconnetAttemps >= this.maxReconnectAttemps) {
             showToast(
-                "No se pudo restablecer la conexion. Los cambios se guardaron localmente.",
+                "No se pudo restablecer la conexión. Los cambios se guardaron localmente.",
                 ToastType.ERROR,
                 {
                     label: "Guardar JSON",
@@ -111,18 +136,34 @@ class WebSocketService {
         }
 
         this.reconnetAttemps++;
+        const actualDelay = delay || Math.pow(2, this.reconnetAttemps) * this.baseDelay + Math.random() * 1000;
 
-        const delay = Math.pow(2, this.reconnetAttemps) * this.baseDelay + Math.random() * 1000;
+        console.log(`[WS] Reintentando conexión en ${actualDelay}ms (intento ${this.reconnetAttemps}/${this.maxReconnectAttemps})`);
 
-        const toastId = showToast(
-            `Conexion perdida. Reconectando... (Intento ${this.reconnetAttemps}/${this.maxReconnectAttemps})`,
-            ToastType.PROCESSING
-        );
+        // Mostrar toast solo en intentos importantes
+        if (this.reconnetAttemps > 2) {
 
-        setTimeout(() => {
-            removeToast(toastId);
-            this.initSocket();
-        }, delay);
+            this.toastId = showToast(
+                `Reconectando... (Intento ${this.reconnetAttemps}/${this.maxReconnectAttemps})`,
+                ToastType.PROCESSING
+            );
+        }
+
+        // Programar reconexión
+        if (this.reconnectTimeoutId) {
+            clearTimeout(this.reconnectTimeoutId);
+        }
+        
+        this.reconnectTimeoutId = setTimeout(() => {
+            if (!this.isIntencionallyClosed) {
+                this.initSocket();
+            }
+            this.reconnectTimeoutId = null;
+            if(this.toastId > 0){
+                removeToast(this.toastId);
+                this.toastId = -1;
+            }
+        }, actualDelay);
     }
 
     public sendEvent(payload: any, addToOfflineQueue = true){
@@ -171,44 +212,23 @@ class WebSocketService {
         this.isIntencionallyClosed = true;
         this.stopHeartbeat();
         this.offlineQueue = [];
+        
+        if (this.reconnectTimeoutId) {
+            clearTimeout(this.reconnectTimeoutId);
+            this.reconnectTimeoutId = null;
+        }
 
-        if(this.socket){
-            if(this.socket.readyState === WebSocket.OPEN){
+        if (this.socket) {
+            if (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING) {
                 this.socket.close(1000, "Cierre voluntario del cliente");
             }
             this.socket = null;
         }
+        this.isConnecting = false;
     }
 
     public isReady(){
         return this.socket && this.socket.readyState === WebSocket.OPEN;
-    }
-
-    private handleConflict(data: any): void {
-        const confilctId = data.conflictId || `node_${data.nodeId}`;
-        const serverVersion = data.serverVersion;
-        const clientVersion = this.confilctResolver.get(confilctId) || 0;
-
-        if(serverVersion > clientVersion){
-            console.warn(`[WS] Conflicto detectado en ${confilctId}. Servidor tiene version mas reciente.`);
-
-            showToast(
-                `Conclicto detectado: ${data.description || "cambios en conflicto"}`,
-                ToastType.ERROR,
-                {
-                    label: "Resolver",
-                    action: () => {
-                        this.sendEvent({ tipo: 'solicitar_estado_completo' });
-                    }
-                }
-            );
-
-            const pendingChanges = this.offlineQueue.filter(q => q.conflictId === confilctId || q.id === data.nodeId);
-
-            if(pendingChanges.length > 0){
-                localStorage.setItem(`pending_conflict_${confilctId}`, JSON.stringify(pendingChanges));
-            }
-        }
     }
 
 }

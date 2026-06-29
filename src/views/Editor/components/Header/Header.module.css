@@ -1,0 +1,110 @@
+.header{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 2;
+    padding: 20px 20px;
+    padding-bottom: 12px;
+}
+
+.header > span {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.usersPanel {
+    display: flex;
+    gap: 0;
+}
+
+.userAvatar {
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+    font-weight: 600;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid rgba(10, 14, 26, 0.8);
+    color: white;
+    cursor: help;
+    margin-left: -4px;
+    transition: transform 0.15s;
+    pointer-events: all;
+}
+
+.userAvatar:first-child {
+    margin-left: 0;
+}
+
+.userAvatar:hover {
+    transform: scale(1.1);
+    z-index: 2;
+}
+
+.projectName{
+    max-width: 400px;
+    display: flex;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 8px 15px;
+    align-items: center;
+    backdrop-filter: blur(12px);
+}
+
+.projectName p {
+    width: fit-content;
+    color: #ccc;
+    font-size: 14px;
+    margin: 0;
+}
+
+.projectName input {
+    pointer-events: auto;
+    background-color: transparent;
+    border: none;
+    pointer-events: auto;
+    color: white;
+    font-size: 14px;
+    flex-grow: 1;
+}
+
+.projectName input:focus{
+    outline: none;
+}
+
+.topButtons {
+    display: flex;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    padding: 4px 8px;
+    pointer-events: auto;
+    backdrop-filter: blur(12px);
+}
+
+.topButtons img{
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 6px;
+    transition: all 0.2s;
+    opacity: 0.5;
+    width: 18px;
+    height: 18px;
+    filter: invert(0.7);
+    display: block;
+}
+
+.topButtons img:hover{
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.06);   
+    filter: invert(1);
+}

@@ -53,6 +53,7 @@ export const rollbackTransaction = () => {
 }
 
 export const pushAction = (action: HistoryItem) => {
+    console.log("Registrado Evento", action.label);
     if(isTransactionActive){
         transactionActions.push(action);
     } else {
@@ -61,6 +62,8 @@ export const pushAction = (action: HistoryItem) => {
 }
 
 export const pushToStack = (action: HistoryItem) => {
+
+
     setUndoStack(prev => {
         const newStack = [...prev, action];
         if(newStack.length > 100) return newStack.slice(1);
