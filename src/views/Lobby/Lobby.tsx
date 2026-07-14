@@ -281,7 +281,6 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
     nodus.setDraw(() => {
         drawInfiniteFloor(nodusCanvas.getCanvas(), nodusCanvas.getCK());
         drawGrid(mousePos);
-        nodusCanvas.requestRedraw();
     });
 
     const startFlow = () => {

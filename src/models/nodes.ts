@@ -124,7 +124,7 @@ export const addNode = (x: number, y : number, name? : string) => {
         tipo: "nuevo_nodo",
         nodo: {
             id: newID,
-            w: 160,
+            w: 160, 
             h: 80,
             x: x,
             y: y,
@@ -585,7 +585,6 @@ export const addNodeProperty = (id: string, propertyName: string, propertyValue:
     }));
 
     invalidateParagraphCache();
-    nodusCanvas.requestRedraw();
 
     if(send){
         wsService.sendEvent({
@@ -610,7 +609,6 @@ export const deleteNodeProperty = (id: string, propertyName: string, send = true
     });
 
     invalidateParagraphCache();
-    nodusCanvas.requestRedraw();
 
     if(send){
         wsService.sendEvent({

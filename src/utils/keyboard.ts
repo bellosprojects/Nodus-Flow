@@ -1,12 +1,11 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { nodes, selectedNodesIds, setSelectedNodesIds, selectedNodes } from "../models/nodes";
+import { nodes, selectedNodesIds, selectedNodes } from "../models/nodes";
 import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
 import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette/CommandPalette";
 import { activeUsers, useUser } from "../models/users";
 import { addPing } from "../models/ping";
-import { connectionsByNode } from "../models/connections";
 import { performRedo, performUndo } from "../core/history";
-import { actionDeleteSelectedNodes } from "../core/actions";
+import { actionDeleteSelectedNodes, actionInvertSelection, actionSelectAll, actionSelectNone, actionSelectUnconnected } from "../core/actions";
 
 async function fullScreenEvent(e: KeyboardEvent){
 
@@ -110,15 +109,13 @@ function nodeSelectionsEvent(e: KeyboardEvent){
     if(e.ctrlKey || e.metaKey){
         e.preventDefault();
         if(e.key === 'a'){
-            setSelectedNodesIds([...nodes].map(node => node.id));
+            actionSelectAll();
         } else if(e.key === 'd'){
-            setSelectedNodesIds([]);
+            actionSelectNone();
         } else if(e.key === 'i'){
-            const currentIds = selectedNodesIds();
-            const invertedIds = [...nodes].filter(n => !currentIds.includes(n.id)).map(it => it.id);
-            setSelectedNodesIds(invertedIds);
+            actionInvertSelection();
         } else if(e.key === 'u'){
-            setSelectedNodesIds([...nodes].filter(node => connectionsByNode(node.id).length === 0).map(node => node.id));
+            actionSelectUnconnected();
         }
     }
 }

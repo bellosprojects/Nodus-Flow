@@ -4,6 +4,7 @@ import { invalidateAllResources, invalidateParagraphCache } from "./renderer";
 import { mouseEvents } from "../utils/mouse";
 import { createCameraStore } from "./camera";
 import { userData } from "../models/userStore";
+import { createSignal } from "solid-js";
 
 // Cache de recursos WebGL
 let cachedCK: CanvasKit | null = null;
@@ -19,9 +20,8 @@ class NodusCanvas {
     public camera = createCameraStore();
     
     // Bandera para evitar redibujos innecesarios
-    private needsRedraw: boolean = true;
     private resizeObserver: ResizeObserver | null = null;
-    private isResizing: boolean = false;
+    public readonly isResizing = createSignal(false);
     private resizeTimeout: number | null = null;
 
     private crashCount = 0;
@@ -34,7 +34,6 @@ class NodusCanvas {
 
         if (this.crashCount > 3) {
             console.error("Demasiados fallos seguidos. Forzando recarga limpia de la aplicación...");
-            window.location.reload();
             return;
         }
 
@@ -86,14 +85,12 @@ class NodusCanvas {
             }, 5000);
 
             this.isRecovering = false;
-            this.needsRedraw = true;
             
             // 7. Forzar un redibujo inmediato
             this.render();
 
         } catch (recoveryError) {
             console.error("El motor de recuperación también falló. Aplicando hard-reset:", recoveryError);
-            window.location.reload();
         }
     }
 
@@ -163,8 +160,13 @@ class NodusCanvas {
     }
 
     private render = () => {
+
+        if (this.isResizing[0]()){
+            this.animationFrameId = requestAnimationFrame(this.render);
+            return;
+        }
+
         if (!this.sufrace || !this.draw) {
-            console.warn("[NodusCanvas] No surface or draw, scheduling next frame");
             this.animationFrameId = requestAnimationFrame(this.render);
             return;
         }
@@ -194,7 +196,6 @@ class NodusCanvas {
 
         } catch (error) {
             console.error("💥 Catástrofe en el Render Loop de CanvasKit:", error);
-            cancelAnimationFrame(this.animationFrameId);
             this.handleCanvasCrash(error);
         }
     }
@@ -203,71 +204,51 @@ class NodusCanvas {
         this.render();
     }
 
-    async resize(){
-        console.log("[NodusCanvas] Resize called");
-        if(!this.canvasRef || !this.CK){
-            console.warn("[NodusCanvas] Resize: no canvas or CK");
-            return
-        };
-        
-        if (this.isResizing){
-            console.log("[NodusCanvas] Resize: already resizing");
-            return;
+    public pauseRenderLoop(){
+        if(this.animationFrameId){
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = 0;
         }
-        this.isResizing = true;
+        this.isResizing[1](true);
+    }
 
-        if(this.needsRedraw){
-            invalidateAllResources();
-            invalidateParagraphCache();
-        }
+    public resumeRenderLoop(){
+        this.isResizing[1](false);
+        this.render();
+    }
+
+    async resize(){
+        if(this.isResizing[0]()) return;
+        this.pauseRenderLoop();
         
         try {
+            invalidateAllResources();
+            invalidateParagraphCache();
+
+            if(this.sufrace){
+                this.sufrace.delete();
+                this.sufrace = null;
+            }
+
             const cssWidth = window.innerWidth;
             const cssHeight = window.innerHeight;
             const dpr = this.camera.getDPR();
 
-            console.log(`[NodusCanvas] Resize to ${cssWidth}x${cssHeight} @${dpr}x`);
 
             this.canvasRef.width = cssWidth * dpr;
             this.canvasRef.height = cssHeight * dpr;
             this.canvasRef.style.width = `${cssWidth}px`;
             this.canvasRef.style.height = `${cssHeight}px`;
 
-            const needsNewSurface = !this.sufrace || 
-                this.sufrace.width() !== this.canvasRef.width || 
-                this.sufrace.height() !== this.canvasRef.height;
-
-            console.log(`[NodusCanvas] Needs new surface: ${needsNewSurface}`);
-
-            if (needsNewSurface) {
-                // --- CRÍTICO: Invalidar TODO antes de recrear ---
-                // 1. Invalidar recursos de renderer
-                invalidateAllResources();  // <-- Esta función ya existe, asegurarse que limpia TODO
-                invalidateParagraphCache();
-                
-                // 2. Destruir superficie vieja
-                if (this.sufrace) {
-                    try {
-                        if (!(this.sufrace as any).isDeleted?.()) {
-                            this.sufrace.delete();
-                        }
-                    } catch (e) {
-                        console.warn("Error al limpiar la superficie anterior:", e);
-                    }
-                    this.sufrace = null;
-                }
-
-                await this._createNewSurface();
-                
-                this.isResizing = false;
-                return; // Salir temprano, la creación se hará en el timeout
-            }
+            await this._createNewSurface();
             
-            this.needsRedraw = true;
+            invalidateAllResources();
+            invalidateParagraphCache();
+            
+            this.resumeRenderLoop();
         } catch (error) {
             console.error("Error en resize:", error);
-        } finally {
-            this.isResizing = false;
+            this.resumeRenderLoop();
         }
     }
 
@@ -293,7 +274,6 @@ class NodusCanvas {
                 // Invalidar nuevamente por si acaso
                 invalidateAllResources();
                 invalidateParagraphCache();
-                this.needsRedraw = true;
             } else {
                 console.warn("[NodusCanvas] WebGL surface failed, trying CPU fallback...");
                 throw new Error("WebGL surface creation failed");
@@ -306,7 +286,6 @@ class NodusCanvas {
                 this.sufrace = newSurfaceCPU;
                 invalidateAllResources();
                 invalidateParagraphCache();
-                this.needsRedraw = true;
             } else {
                 console.error("No se puede crear un contexto de dibujo");
             }
@@ -315,7 +294,6 @@ class NodusCanvas {
 
     public setDraw(action: Function){
         this.draw = action;
-        this.needsRedraw = true;
     }
 
     public getFont(){
@@ -347,10 +325,6 @@ class NodusCanvas {
             console.error("Error getting picture:", error);
             return null;
         }
-    }
-
-    public requestRedraw() {
-        this.needsRedraw = true;
     }
 
     public destroy(){

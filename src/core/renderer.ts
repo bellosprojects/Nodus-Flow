@@ -31,7 +31,7 @@ function getPaint(CK: CanvasKit, key: string, init: (paint: any) => void): any {
     // Si no existe o si CanvasKit ya destruyó el puntero interno
     if (!paint || paint.isDeleted()) { 
         paint = new CK.Paint();
-        paintCache.set(key, paint);
+        //paintCache.set(key, paint);
     }
     
     init(paint); // Seguro de llamar porque paint ahora está 100% vivo
@@ -44,7 +44,7 @@ function getPath(CK: CanvasKit, key: string): any {
     
     if (!path || path.isDeleted()) {
         path = new CK.Path();
-        pathCache.set(key, path);
+        //pathCache.set(key, path);
     }
     
     return path;
@@ -55,7 +55,7 @@ function getShader(_: CanvasKit, key: string, init: () => any): any {
     let shader = shaderCache.get(cacheKey);
     if (!shader) {
         shader = init();
-        shaderCache.set(key, shader);
+        //shaderCache.set(key, shader);
     }
     return shader;
 }
@@ -81,7 +81,7 @@ function getParagraph(CK: CanvasKit, text: string, style: any, fontMgr: FontMgr,
         const builder = CK.ParagraphBuilder.Make(style, fontMgr);
         builder.addText(text);
         paragraph = builder.build();
-        paragraphCache.set(key, paragraph);
+        //paragraphCache.set(key, paragraph);
     }
     return paragraph;
 }

@@ -52,7 +52,6 @@ export const AutosavePanel = (props: AutosavePanelProps) => {
                 nodusCanvas.camera.setOffsetX(data.cameraState.offsetX);
                 nodusCanvas.camera.setOffsetY(data.cameraState.offsetY);
             }
-            nodusCanvas.requestRedraw();
             props.onClose();
         });
     };

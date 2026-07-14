@@ -93,7 +93,6 @@ export const eventHandlers: Record<string, SokectHandler> = {
     },
     'mover_cursor': (data) => {
         updateCursor(data.nombre, data.x, data.y);
-        nodusCanvas.requestRedraw();
     },
     'ping_atencion': (data) => {
         addPing(data.x, data.y, data.color, data.nombre, false);

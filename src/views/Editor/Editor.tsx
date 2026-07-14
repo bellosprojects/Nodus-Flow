@@ -3,7 +3,7 @@ import { CURRENT_POSITION, LAST_ACTIONS, LEFT_TOOLBAR, TOOL_BELT } from "./compo
 import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupar, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
 import { lerp } from "../../utils/math";
 import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
-import { addConnection, connections, setConnections, setSelectedConnectionId, addConnectionProperty, changeConnectionStyle } from "../../models/connections";
+import { connections, setConnections, setSelectedConnectionId } from "../../models/connections";
 import { moveNodeThrottle, wsService } from "../../core/socket";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
@@ -44,6 +44,9 @@ import {
     captureNodesSnapshot, 
     actionFinalizeMultipleNodesMove, 
     actionFinalizeMultipleNodesResize,
+    actionCreateConnection,
+    actionSetConnectionProperty,
+    actionChangeConnectionStyle,
 } from "../../core/actions";
 
 import { 
@@ -57,6 +60,7 @@ import { ConfigPanel } from "./components/ConfigPanel/ConfiguracionPanel";
 import { AutosavePanel } from "./components/AutosavePanel/AutosavePanel";
 import { EDITOR_HEADER } from "./components/Header/Header";
 import { LAYERS_PANEL } from "./components/LayersPanel/LayersPanel";
+import { commitTransaction, startTransaction } from "../../core/history";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
@@ -137,8 +141,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     let connectionSourcePoint: {x: number, y: number, direction: ANCHOR_POINT} | null = null;
 
     const handleMouseDown = (e: MouseEvent) => {
-
-        nodusCanvas.requestRedraw();
 
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
@@ -249,7 +251,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             nombre: useUser().name()
         }, false);
 
-        nodusCanvas.requestRedraw();
 
         //Primero verificamos si es resizing
         if(isResizing()){
@@ -328,8 +329,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
     const handleMouseUp = (e : MouseEvent) => {
 
-        nodusCanvas.requestRedraw();
-
         // Finalizar resize - registrar en historial
         if(isResizing()){
             const currentNodes = selectedNodesIds().map(id => {
@@ -393,21 +392,23 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             );
 
             if(target && target.id !== connectionSourceId){
-                const newId = addConnection(connectionSourceId, target.id)?.id;
-                if(newId){
+                startTransaction("Crear conexion");
+                const conn = actionCreateConnection(connectionSourceId, target.id);
+                if(conn){
                     if(connectionSourcePoint){
-                        addConnectionProperty(newId, 'fromPoint', connectionSourcePoint.direction);
+                        actionSetConnectionProperty(conn.id, 'fromPoint', connectionSourcePoint);
                     }
                     if(connectionPoint){
-                        addConnectionProperty(newId, 'toPoint', connectionPoint.direction);
+                        actionSetConnectionProperty(conn.id, 'toPoint', connectionPoint.direction);
                     }
                     if(e.altKey){
-                        addConnectionProperty(newId, 'dashed', 'true');
+                        actionSetConnectionProperty(conn.id, 'dashed', true);
                     }
                     if(e.ctrlKey || e.metaKey){
-                        changeConnectionStyle(newId, 7);
+                        actionChangeConnectionStyle(conn.id, 7);
                     }
                 }
+                commitTransaction();
             }
         }
 
@@ -503,8 +504,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                             });
                         } else {
                             // Interpolar suavemente (factor 0.15 es típico)
-                            const newX = node.x + dx * 0.05;
-                            const newY = node.y + dy * 0.05;
+                            const newX = node.x + dx * 0.15;
+                            const newY = node.y + dy * 0.15;
                             setNodes(n => n.id === node.id, { x: newX, y: newY });
                         }
                     }
@@ -602,7 +603,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             nodusCanvas.setDraw(draw);
 
             console.log("[Editor] Requesting redraw");
-            nodusCanvas.requestRedraw();
         
         } catch (error) {
             console.error('Error initializing CanvasKit:', error);
@@ -637,7 +637,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         setTimeout(() => {
             // Le damos 50ms para que SolidJS pinte los primeros elementos en el árbol reactivo
             nodusCanvas.camera.centerCameraNow();
-            nodusCanvas.requestRedraw();
         }, 50);
 
         onCleanup(() => {
@@ -767,7 +766,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         nodusCanvas.camera.offsetX();
         nodusCanvas.camera.offsetY();
         updateViewportBounds();
-        nodusCanvas.requestRedraw();
     });
 
     return (

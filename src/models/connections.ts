@@ -5,7 +5,7 @@ import { generarUUID } from "../utils/math";
 
 export interface Connection {
     id: string,
-    from: string,
+    from: string, 
     to: string,
     tipo: number,
     properties: any

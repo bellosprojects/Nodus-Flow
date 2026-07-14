@@ -3,12 +3,13 @@ import { For, Show, createMemo, createSignal } from "solid-js";
 import { nodes, selectedNodes } from "../../../../models/nodes";
 import { connections } from "../../../../models/connections";
 import { activeUsers, User, useUser } from "../../../../models/users";
-import { userData, updateCurrentProjectName, addCurrentProjectProperty, deleteCurrentProjectProperty } from "../../../../models/userStore";
+import { userData, updateCurrentProjectName } from "../../../../models/userStore";
 import { isConfigPanelOpen, setIsConfigPanelOpen } from "../../Editor";
 import styles from "./ConfigPanel.module.css";
 
 import deleteIcon from "../../../../assets/delete.svg";
 import closeIcon from "../../../../assets/home.svg";
+import { actionAddProjectProperty, actionDeleteProjectProperty, actionUpdateProjectName } from "../../../../core/actions";
 
 // Tipos para propiedades de la sala
 interface RoomProperty {
@@ -30,7 +31,7 @@ const SUGGESTED_ROOM_PROPS = [
 export const ConfigPanel = () => {
     const [newPropKey, setNewPropKey] = createSignal("");
     const [newPropValue, setNewPropValue] = createSignal("");
-
+    
     // Estadísticas de objetos
     const stats = createMemo(() => ({
         totalNodes: nodes.length,
@@ -65,21 +66,40 @@ export const ConfigPanel = () => {
     const addProperty = () => {
         const key = newPropKey().trim();
         if (key === "") return;
-        addCurrentProjectProperty(key, newPropValue() || "true");
+        actionAddProjectProperty(key, newPropValue() || "true");
         setNewPropKey("");
         setNewPropValue("");
     };
 
-    const deleteProperty = (key: string) => {
-        deleteCurrentProjectProperty(key);
+    const deleteProperty = (key: string, currentValue: any) => {
+        actionDeleteProjectProperty(key, currentValue);
     };
 
     const updateProperty = (key: string, value: string) => {
-        addCurrentProjectProperty(key, value);
+        actionAddProjectProperty(key, value);
     };
 
     // Colores para avatares de usuario
     const getInitials = (name: string) => name.substring(0, 2).toUpperCase();
+
+    let projectNameSnapshot = ""
+
+    const projectNameFocus = () => {
+        projectNameSnapshot = userData.currentProjectName;
+    }
+
+    const projectNameChange = (e: Event) => {
+        updateCurrentProjectName((e.currentTarget as HTMLInputElement).value);
+    }
+
+    const projectNameBlur = (e:Event) => {
+        const newProjectName = (e.currentTarget as HTMLInputElement).value;
+
+        if(newProjectName !== projectNameSnapshot){
+            actionUpdateProjectName(projectNameSnapshot, newProjectName);
+            projectNameSnapshot = newProjectName;
+        }
+    }
 
     return (
         <Show when={isConfigPanelOpen()}>
@@ -102,7 +122,10 @@ export const ConfigPanel = () => {
                                 type="text"
                                 class={styles.projectNameInput}
                                 value={userData.currentProjectName}
-                                onInput={(e) => updateCurrentProjectName(e.currentTarget.value, true)}
+                                onFocus={projectNameFocus}
+                                onInput={projectNameChange}
+                                onChange={projectNameChange}
+                                onBlur={projectNameBlur}
                                 placeholder="Enter project name..."
                             />
                         </section>
@@ -201,7 +224,7 @@ export const ConfigPanel = () => {
                                             />
                                             <button
                                                 class={styles.deletePropBtn}
-                                                onClick={() => deleteProperty(prop.key)}
+                                                onClick={() => deleteProperty(prop.key, prop.value)}
                                             >
                                                 <img src={deleteIcon} alt="Delete" />
                                             </button>

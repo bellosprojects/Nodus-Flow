@@ -57,7 +57,9 @@ function NodusFlowApp() {
                     cursor: "crosshair",
                     display: "block",
                     outline: "none",
-                    "touch-action": "none"
+                    "touch-action": "none",
+                    filter: nodusCanvas.isResizing[0]()? "blur(20px)" : "none",
+                    transition: "filter 0.4s ease"
                 }}
             />
 
