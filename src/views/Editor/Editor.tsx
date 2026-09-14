@@ -1,6 +1,6 @@
 import { Properties } from "./components/Properties";
 import { CURRENT_POSITION, LAST_ACTIONS, LEFT_TOOLBAR, TOOL_BELT } from "./components/Toolbars";
-import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupar, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
+import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
 import { lerp } from "../../utils/math";
 import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
 import { connections, setConnections, setSelectedConnectionId } from "../../models/connections";
@@ -24,14 +24,16 @@ import {
     setResizingDots, 
     drawNodeGrid, 
     drawConnectionPoint, 
-    setSourceAnchorPoint 
+    setSourceAnchorPoint,
+    invalidateAllResources,
+    invalidateParagraphCache
 } from "../../core/renderer";
 
 import "../../App.css";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { userData } from "../../models/userStore";
+import { deleteCurrentProjectProperty, userData } from "../../models/userStore";
 import { COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette/CommandPalette";
 import { activeUsers, setActiveUsers, useUser } from "../../models/users";
 import { ToastContainer } from "../components/ToastContainer";
@@ -47,6 +49,7 @@ import {
     actionCreateConnection,
     actionSetConnectionProperty,
     actionChangeConnectionStyle,
+    actionCreateNode,
 } from "../../core/actions";
 
 import { 
@@ -61,6 +64,7 @@ import { AutosavePanel } from "./components/AutosavePanel/AutosavePanel";
 import { EDITOR_HEADER } from "./components/Header/Header";
 import { LAYERS_PANEL } from "./components/LayersPanel/LayersPanel";
 import { commitTransaction, startTransaction } from "../../core/history";
+import { setIsAppLoading, setLoadingAppMessage } from "../components/Transition";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
@@ -68,13 +72,18 @@ export const [isCommandPaletteOpen, setIsCommandPaletteOpen] = createSignal(fals
 export const [isConfigPanelOpen, setIsConfigPanelOpen] = createSignal(false);
 export const [isAutosavePanelOpen, setIsAutosavePAnelopen] = createSignal(false);
 
+export const [isRunningDataFlow, setIsRunningDataFlow] = createSignal(false);
+export const [dataFlowResult, setDataFlowResult] = createSignal("");
+
+export const [isPressedEspace, setIsPRessedEspace] = createSignal(false);
+
 export const [isResizing, setIsResizing] = createSignal(false);
 export const [referencePoint, setReferencePoint] = createSignal<{x: number, y: number} | null>(null);
 export const [resizingBox, setResizingBox] = createSignal<{x: number, y:number, width:number, height: number}| null>(null);
 export let resizingNodesCopy: Node[] = [];
 export let nodesMoveSnapshot: { id: string; x: number; y: number; width: number; height: number }[] = [];
 
-export const [mouseOption, setMouseOption] = createSignal<'move' | 'select' | 'connect'>('move');
+export const [mouseOption, setMouseOption] = createSignal<'move' | 'select' | 'connect'>('select');
 export const [layerView, setLayerView] = createSignal<'nodes' | 'connections'>('nodes');
 
 export const [mouseDisabled, setMouseDisables] = createSignal(false);
@@ -148,12 +157,18 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         setIsCommandPaletteOpen(false);
         setSelectedConnectionId(null);
 
+        if (mouseOption() === 'move' || isPressedEspace()){
+            setDraggedNodeId("root");
+            return;
+        }
+
         const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
         // Primero verificamos si es un resize
+        const resizingPointsize = 8 / nodusCanvas.camera.zoom();
         const resizingPoint = resizingDots().find(dot => 
-            x <= dot.x + 8 && x >= dot.x - 8 &&
-            y <= dot.y + 8 && y >= dot.y - 8
+            x <= dot.x + resizingPointsize && x >= dot.x - resizingPointsize &&
+            y <= dot.y + resizingPointsize && y >= dot.y - resizingPointsize
         );
 
         if(resizingPoint){
@@ -172,19 +187,21 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             return;
         }
 
-        const hit = [...nodes].reverse().find(node =>
-            x >= node.x && x <= node.x + node.width &&
-            y >= node.y && y <= node.y + node.height
+        const zoom = nodusCanvas.camera.zoom();
+
+        const connectionHit = [...nodes].reverse().find(node =>
+            x >= (node.x - 10 / zoom) && x <= (node.x + node.width + 10 / zoom) &&
+            y >= (node.y - 10 / zoom) && y <= (node.y + node.height + 10 /zoom)
         );
 
         if(mouseOption() == 'connect'){
-            if(hit && !hit.lock){
+            if(connectionHit && !connectionHit.lock){
                 isConnecting = true;
-                connectionSourceId = hit.id;
+                connectionSourceId = connectionHit.id;
 
-                const points = anchorPoints.map(p => ({x: hit.x + hit.width * p.x, y: hit.y + hit.height * p.y, direction: p.direction}));
+                const points = anchorPoints.map(p => ({x: connectionHit.x + connectionHit.width * p.x, y: connectionHit.y + connectionHit.height * p.y, direction: p.direction}));
 
-                const center = {x: hit.x + hit.width / 2, y: hit.y + hit.height / 2};
+                const center = {x: connectionHit.x + connectionHit.width / 2, y: connectionHit.y + connectionHit.height / 2};
                 const click = {x, y};
 
                 let nearest = points[0];
@@ -209,32 +226,27 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             return;
         }
 
+        const hit = [...nodes].reverse().find(node =>
+            x >= node.x && x <= node.x + node.width &&
+            y >= node.y && y <= node.y + node.height
+        );
+
         if(hit){
             const isAlreadySelected = selectedNodesIds().includes(hit.id);
 
-            if(!isAlreadySelected){
-                if(!e.shiftKey){
-                    ocupar(hit.id);
-                } else {
-                    setSelectedNodesIds(prev => [...prev, hit.id]);
+            if(ocupadoPor(hit.id) === undefined){
+                if(!isAlreadySelected ){
+                    if(!e.shiftKey){
+                        setSelectedNodesIds([hit.id]);
+                    } else {
+                        setSelectedNodesIds(prev => [...prev, hit.id]);
+                    }
                 }
-            }
-
-            if(mouseOption() == 'move' && ocupadoPor(hit.id) === undefined){
-                if(!hit.lock){
-                    setDraggedNodeId(hit.id);
-                    // Capturar snapshot para el historial al inicio del arrastre
-                    nodesMoveSnapshot = captureNodesSnapshot(selectedNodesIds().length > 0 ? selectedNodesIds() : [hit.id]);
-                }
+                setDraggedNodeId(hit.id);
             }
         } else {
-            //CLIC AL VACIO
-            if(mouseOption() === 'select'){
-                isSelecting = true;
-                selectionRect = {x0: x, y0: y, x1: x, y1: y};
-            } else if (mouseOption() == 'move'){
-                setDraggedNodeId("root"); //Paneo de camara
-            }
+            isSelecting = true;
+            selectionRect = {x0: x, y0: y, x1: x, y1: y};
             setSelectedNodesIds([]);
         }
     }
@@ -258,16 +270,15 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             return;
         }
 
+
+        const resizingPointSize = 8 / nodusCanvas.camera.zoom();
         setFocusedPoint(resizingDots().find(dot => 
-            mousePos.x <= dot.x + 8 && mousePos.x >= dot.x - 8 &&
-            mousePos.y <= dot.y + 8 && mousePos.y >= dot.y - 8
+            mousePos.x <= dot.x + resizingPointSize && mousePos.x >= dot.x - resizingPointSize &&
+            mousePos.y <= dot.y + resizingPointSize && mousePos.y >= dot.y - resizingPointSize
         ) || null);
 
-        if(focusedPoint()){
-            setMouseOption(prev => prev);
-        }
-
         if(mouseOption() === 'connect'){
+            const connectPointSize = 10 / nodusCanvas.camera.zoom();
             const snapNode = [...nodes].reverse().find(node =>
                 mousePos.x >= node.x - 10 && mousePos.x <= node.x + node.width + 10 &&
                 mousePos.y >= node.y - 10 && mousePos.y <= node.y + node.height + 10
@@ -283,8 +294,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 });
 
                 const snapPoint = points.find(p => 
-                    mousePos.x <= p.x + 10 && mousePos.x >= p.x - 10 &&
-                    mousePos.y <= p.y + 10 && mousePos.y >= p.y - 10
+                    mousePos.x <= p.x + connectPointSize && mousePos.x >= p.x - connectPointSize &&
+                    mousePos.y <= p.y + connectPointSize && mousePos.y >= p.y - connectPointSize
                 );
 
                 connectionPoint = snapPoint? {x: snapPoint.x, y: snapPoint.y, direction: snapPoint.direction} : null;
@@ -304,7 +315,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
         if(draggedNodeId() == null) return;
 
-        if(draggedNodeId() == "root"){
+        if(draggedNodeId() == "root" && !isRunningDataFlow()){
             nodusCanvas.camera.setOffsetX(prev =>  prev + e.movementX);
             nodusCanvas.camera.setOffsetY(prev =>  prev + e.movementY);
             return;
@@ -341,9 +352,9 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 const hasChanges = nodesMoveSnapshot.some((snapshot, i) => {
                     const current = currentNodes[i];
                     return current && (current.width !== snapshot.width || 
-                                      current.height !== snapshot.height ||
-                                      current.x !== snapshot.x ||
-                                      current.y !== snapshot.y);
+                                        current.height !== snapshot.height ||
+                                        current.x !== snapshot.x ||
+                                        current.y !== snapshot.y);
                 });
                 
                 if (hasChanges) {
@@ -385,10 +396,12 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         if(isConnecting && connectionSourceId){
             const {x: mouseX, y: mouseY} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
+            const zoom = nodusCanvas.camera.zoom();
+
             const target = [...nodes].reverse().find(n => 
                 !n.lock &&
-                mouseX >= n.x && mouseX <= n.x + n.width &&
-                mouseY >= n.y && mouseY <= n.y + n.height
+                mouseX >= (n.x - 10 / zoom) && mouseX <= (n.x + n.width + 10 / zoom) &&
+                mouseY >= (n.y - 10 / zoom) && mouseY <= (n.y + n.height + 10 / zoom)
             );
 
             if(target && target.id !== connectionSourceId){
@@ -396,7 +409,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 const conn = actionCreateConnection(connectionSourceId, target.id);
                 if(conn){
                     if(connectionSourcePoint){
-                        actionSetConnectionProperty(conn.id, 'fromPoint', connectionSourcePoint);
+                        actionSetConnectionProperty(conn.id, 'fromPoint', connectionSourcePoint.direction);
                     }
                     if(connectionPoint){
                         actionSetConnectionProperty(conn.id, 'toPoint', connectionPoint.direction);
@@ -406,6 +419,24 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     }
                     if(e.ctrlKey || e.metaKey){
                         actionChangeConnectionStyle(conn.id, 7);
+                    }
+                }
+                commitTransaction();
+            } else if (!target){
+                startTransaction("Crear nodo con conexion");
+                const new_node = actionCreateNode(mouseX - 80, mouseY - 40);
+                if (new_node) {
+                    const conn = actionCreateConnection(connectionSourceId, new_node.id);
+                    if(conn) {
+                        if(connectionSourcePoint){
+                            actionSetConnectionProperty(conn.id, 'fromPoint', connectionSourcePoint.direction);
+                        }
+                        if(e.altKey){
+                            actionSetConnectionProperty(conn.id, 'dashed', true);
+                        }
+                        if(e.ctrlKey || e.metaKey){
+                            actionChangeConnectionStyle(conn.id, 7);
+                        }
                     }
                 }
                 commitTransaction();
@@ -467,7 +498,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
             
             const CK = nodusCanvas.getCK();
-            const canvas = nodusCanvas.getCanvas();
 
             function draw() {
                 
@@ -513,8 +543,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 
                 // Dibujar nodos bloqueados (visibles)
                 lockedNodes.forEach(node => {
-                    drawNode(CK, canvas, node);
-                    drawNodeText(CK, canvas, node, nodusCanvas.getFont());
+                    drawNode(CK, node);
+                    drawNodeText(CK, node, nodusCanvas.getFont());
                 });
                 
                 // Dibujar conexiones solo entre nodos visibles
@@ -524,7 +554,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     
                     if (fromNode && !fromNode.lock && toNode && !toNode.lock && 
                         (isNodeVisible(fromNode) || isNodeVisible(toNode))) {
-                        drawConnection(CK, canvas, fromNode, toNode, conn);
+                        drawConnection(CK, fromNode, toNode, conn);
                     }
                 });
 
@@ -536,39 +566,38 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                             y: fromNode.y + fromNode.height / 2
                         };
 
-                        drawElasticLine(CK, canvas, fromNode, mousePos, startPoint);
+                        drawElasticLine(CK, fromNode, mousePos, startPoint);
                     }
                 }
                 
                 // Dibujar nodos no bloqueados (visibles)
                 unlockedNodes.forEach(node => {
-                    drawNode(CK, canvas, node);
-                    drawNodeText(CK, canvas, node, nodusCanvas.getFont());
+                    drawNode(CK, node);
+                    drawNodeText(CK, node, nodusCanvas.getFont());
                 });
                 
                 // Grid solo para nodo seleccionado único y visible
                 if(selectedNodesIds().length === 1){
                     const node = selectedNodes()[0];
                     if(node && isNodeVisible(node)){
-                        drawNodeGrid(CK, canvas, node);
+                        drawNodeGrid(CK, node);
                     }
                 }
 
-                // Resto del código igual...
                 if(connectionPoint){
-                    drawConnectionPoint(CK, canvas, {
+                    drawConnectionPoint(CK, {
                         x: connectionPoint.x,
                         y: connectionPoint.y
                     });
                 }
                 
                 if(connectionSourcePoint){
-                    drawConnectionPoint(CK, canvas, { x: connectionSourcePoint.x, y: connectionSourcePoint.y }, "#33a1ff");
+                    drawConnectionPoint(CK, { x: connectionSourcePoint.x, y: connectionSourcePoint.y }, "#33a1ff");
                 }
                 
                 setResizingDots([]);
                 if(selectedNodesIds().length > 0){
-                    drawResizingBox(CK, canvas, selectedNodes())
+                    drawResizingBox(CK, selectedNodes())
                 }
                 
                 if(isSelecting){
@@ -599,18 +628,20 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 if(flowConecctions > 1) flowConecctions = 0;
             }
 
-            console.log("[Editor] Setting draw function");
             nodusCanvas.setDraw(draw);
-
-            console.log("[Editor] Requesting redraw");
-        
+            nodusCanvas.setOnResize(() => {
+                invalidateAllResources();
+                invalidateParagraphCache();
+            })
+                        
         } catch (error) {
             console.error('Error initializing CanvasKit:', error);
         }
     });;
 
+    const appWindow = getCurrentWindow();
     onMount(() => {
-
+        
         initializeEditorKeyboardEvents();
 
         const handlerGlobalMouseMove = (_: MouseEvent) => {
@@ -658,12 +689,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             setDraggedNodeId(null);
             setNodes([]);
             setConnections([]);
+            invalidateAllResources();
+            invalidateParagraphCache();
+
+            deleteCurrentProjectProperty('backgroundColor', false);
 
         });
     });
 
-    const appWindow = getCurrentWindow();
-    appWindow.setTitle(`Nodus Flow - ${useUser().name()}`);
 
     async function onFullScrren(){
         const isFullScreen = await appWindow.isFullscreen();
@@ -671,7 +704,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     }
 
     const onHome = () => {
+        setIsAppLoading(true);
+        setLoadingAppMessage("Guardando...");
         props.onNavigate('lobby');
+
+        setTimeout(() => setIsAppLoading(false), 1200);
     }
 
     const handleShare = async () => {
@@ -711,9 +748,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     
     createEffect(() => {
         const mouse = mouseOption();
+        const isEspace = isPressedEspace();
         let cursor = 'default';
 
-        if(focusedPoint() !== null){
+        if(mouse == 'move' || isEspace){
+            cursor = draggedNodeId() !== null? 'grabbing' : 'grab';
+        }
+
+        else if(focusedPoint() !== null){
 
             switch(focusedPoint()?.direction){
                 case ANCHOR_POINT.TOP:
@@ -741,14 +783,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     cursor = "nw-resize";
                     break;
             }
-        } else {
-
-            if(mouse == 'connect'){
-                cursor = 'crosshair';
-            } else if (mouse == 'move'){
-                cursor = draggedNodeId() !== null? 'grabbing' : 'grab';
-            }
         }
+        else if (mouse == 'connect'){
+            cursor = 'crosshair';
+        }
+
             
         nodusCanvas.canvasRef.style.cursor = cursor;
     });
@@ -796,6 +835,24 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             { ConfigPanel() }
 
             { <AutosavePanel onClose={() => setIsAutosavePAnelopen(false)}></AutosavePanel> }
+
+            <Show when={isRunningDataFlow() && dataFlowResult()}>
+                <div style={{
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    transform: "translateX(-50%) translateY(-50%)",
+                    "z-index": 100,
+                    "font-size": "40px",
+                    color: "white",
+                    padding: "9px",
+                    background: "#403820A2",
+                    "backdrop-filter": "blur(5px)",
+                    "border-radius": "4px"
+                }}>
+                    {dataFlowResult()}
+                </div>
+            </Show>
 
             { ToastContainer() }
 

@@ -118,8 +118,6 @@ export const addNode = (x: number, y : number, name? : string) => {
 
     setNodes([...nodes, newNode]);
 
-    console.log("Nodo agregado:", newNode);
-
     wsService.sendEvent({
         tipo: "nuevo_nodo",
         nodo: {

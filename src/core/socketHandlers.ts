@@ -4,6 +4,7 @@ import { addPing } from "../models/ping";
 import { removeToast, showToast, ToastType } from "../models/toast";
 import { setActiveUsers, updateCursor, User } from "../models/users";
 import { addCurrentProjectProperty, deleteCurrentProjectProperty, setUserData, updateCurrentProjectName } from "../models/userStore";
+import { setIsAppLoading } from "../views/components/Transition";
 import { nodusCanvas } from "./NodusCanvas";
 import { initToastId, resetToast } from "./socket";
 
@@ -29,6 +30,7 @@ export const eventHandlers: Record<string, SokectHandler> = {
             resetToast();
         }
         showToast("Sala Cargada", ToastType.SUCCES);
+        setIsAppLoading(false);
     },
     'mover_nodos': (data) => {
         for(let nodo of data.nodos){

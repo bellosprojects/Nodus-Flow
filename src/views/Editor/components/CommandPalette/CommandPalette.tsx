@@ -8,7 +8,7 @@ import { exportDiagramAsPng, exportDiagramAsSVG } from "../../../../core/rendere
 import { exportAsJson } from "../../../../models/userStore";
 import { nodusCanvas } from "../../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../../utils/path";
-import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate } from "../../../../utils/commands";
+import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate, setZoomFromCommand, evalValueFromCommand } from "../../../../utils/commands";
 import { connections, setSelectedConnectionId } from "../../../../models/connections";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);
@@ -35,6 +35,7 @@ enum CommandID {
     DelAllDisconnected = "DEL_ALL_DISCONNECTED",
     DelNode = "DEL_NODENAME",
     ResetView = "RESET_VIEW",
+    SetZoom = "SET_ZOOM",
     ClearCanvas = "CLEAR_CANVAS",
     LockAll = "LOCK_ALL",
     UnLockAll = "UNLOCK_ALL",
@@ -47,7 +48,8 @@ enum CommandID {
     AddNodeProperty = "ADD_NODE_PROPERTY",
     DelNodeProperty = "DEL_NODE_PROPERTY",
     AddConnectionProperty = "ADD_CONNECTION_PROPERTY",
-    DelConnectionProperty = "DEL_CONNECTION_PROPERTY"
+    DelConnectionProperty = "DEL_CONNECTION_PROPERTY",
+    HezaEval = "HEZA_EVAL"
 }
 
 const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) => void, color?: string, argPlaceholder?: string}> = {
@@ -72,6 +74,14 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
             importFromQuery();
         },
         color: "#2c977e"
+    },
+    [CommandID.HezaEval]: {
+        label: 'Eval: ',
+        action: (arg?: string) => {
+            evalValueFromCommand(arg);
+        },
+        color: "#39F3A2",
+        argPlaceholder: "expr"
     },
     [CommandID.GenerateMR]: {
         label: 'Generate: ',
@@ -127,6 +137,14 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
             nodusCanvas.camera.animateTo(offset.offsetX, offset.offsetY, zoom);
         },
         color: "#c1d3df"
+    },
+    [CommandID.SetZoom]: {
+        label: 'Set Zoom: ',
+        action: (arg?: string) => {
+            setZoomFromCommand(arg);
+        },
+        color: "#9Fa4c2",
+        argPlaceholder: "1" 
     },
     [CommandID.ClearCanvas]: {
         label: 'Clear Canvas',

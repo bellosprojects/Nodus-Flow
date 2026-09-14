@@ -1,98 +1,22 @@
 import CanvasKitInit, {Surface, FontMgr, CanvasKit} from "canvaskit-wasm";
 import { getFontData } from "./engine";
-import { invalidateAllResources, invalidateParagraphCache } from "./renderer";
 import { mouseEvents } from "../utils/mouse";
 import { createCameraStore } from "./camera";
 import { userData } from "../models/userStore";
 import { createSignal } from "solid-js";
-
-// Cache de recursos WebGL
-let cachedCK: CanvasKit | null = null;
-let cachedFont: FontMgr | null = null;
 
 class NodusCanvas {
     private CK!: CanvasKit;
     private sufrace: Surface | null = null;
     private animationFrameId: number = 0;
     private draw: Function | null = null;
+    private onRezise: Function | null = null;
     private font: FontMgr | null = null;
     public canvasRef!: HTMLCanvasElement;
     public camera = createCameraStore();
-    
-    // Bandera para evitar redibujos innecesarios
     private resizeObserver: ResizeObserver | null = null;
-    public readonly isResizing = createSignal(false);
-    private resizeTimeout: number | null = null;
-
-    private crashCount = 0;
-    private isRecovering = false;
-
-    private async handleCanvasCrash(_: any) {
-        if (this.isRecovering) return;
-        this.isRecovering = true;
-        this.crashCount++;
-
-        if (this.crashCount > 3) {
-            console.error("Demasiados fallos seguidos. Forzando recarga limpia de la aplicación...");
-            return;
-        }
-
-        console.warn(`[Recuperación] Intento ${this.crashCount} de reestabilizar el lienzo...`);
-
-        try {
-            // 1. Invalidar ABSOLUTAMENTE TODO
-            invalidateAllResources();
-            invalidateParagraphCache();
-
-            // 2. Forzar recolección de basura si es posible
-            if (typeof (globalThis as any).gc === 'function') {
-                (globalThis as any).gc();
-            }
-
-            // 3. Destruir superficie vieja
-            if (this.sufrace) {
-                try {
-                    if (!(this.sufrace as any).isDeleted?.()) {
-                        this.sufrace.delete();
-                    }
-                } catch (e) {
-                    console.log("La superficie ya estaba destruida internamente.");
-                }
-                this.sufrace = null;
-            }
-
-            // 4. Esperar más tiempo para estabilizar
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            // 5. Recrear superficie
-            console.log("[Recuperación] Recreando superficie gráfica...");
-            this.sufrace = this.CK.MakeWebGLCanvasSurface(this.canvasRef, this.CK.ColorSpace.SRGB, {
-                antialias: 1, depth: 1, stencil: 1
-            });
-            
-            if (!this.sufrace) {
-                console.warn("[Recuperación] WebGL no responde, usando renderizado por Software.");
-                this.sufrace = this.CK.MakeSWCanvasSurface(this.canvasRef);
-            }
-
-            if (!this.sufrace) {
-                throw new Error("No se pudo crear una superficie de recuperación.");
-            }
-
-            // 6. Resetear contador después de 5 segundos de estabilidad
-            setTimeout(() => {
-                this.crashCount = 0;
-            }, 5000);
-
-            this.isRecovering = false;
-            
-            // 7. Forzar un redibujo inmediato
-            this.render();
-
-        } catch (recoveryError) {
-            console.error("El motor de recuperación también falló. Aplicando hard-reset:", recoveryError);
-        }
-    }
+    private isRunning: boolean = false;
+    public isResizing = createSignal(false);
 
     async init(canvasElement: HTMLCanvasElement){
         console.log("[NodusCanvas] Init started");
@@ -103,197 +27,100 @@ class NodusCanvas {
         this.canvasRef.addEventListener("mousemove", (e) => mouseEvents.onMove(e));
         this.canvasRef.addEventListener("mouseup", (e) => mouseEvents.onUp(e));
 
-        // Reutilizar instancia de CanvasKit si existe
-        if (cachedCK) {
-            console.log("[NodusCanvas] Using cached CK");
-            this.CK = cachedCK;
-        } else {
-            console.log("[NodusCanvas] Loading CanvasKit...");
-            this.CK = await CanvasKitInit({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.39.1/bin/${file}`,
-            });
-            cachedCK = this.CK;
-            console.log("[NodusCanvas] CanvasKit loaded");
-        }
+        this.CK = await CanvasKitInit({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.39.1/bin/${file}`
+        });
 
-        // Reutilizar font si existe
-        if (cachedFont) {
-            this.font = cachedFont;
-        } else {
-            this.font = this.CK.FontMgr.FromData(await getFontData());
-            cachedFont = this.font;
-        }
+        this.font = this.CK.FontMgr.FromData(await getFontData());
 
-        console.log("[NodusCanvas] Calling resize...");
-        await this.resize();
-        
         console.log("[NodusCanvas] Setting up resize observer...");
-        // Usar ResizeObserver en lugar de event listener para mejor rendimiento
         this.resizeObserver = new ResizeObserver(() => {
-            if (this.resizeTimeout) {
-                clearTimeout(this.resizeTimeout);
-            }
-            this.resizeTimeout = window.setTimeout(() => {
-                this.resize();
-            }, 100);
+            this.resize();
         });
         this.resizeObserver.observe(this.canvasRef);
+
+        this.isRunning = true;
+        this.startLoop();
+    }
+
+    private startLoop(){
+        if(!this.isRunning) return;
         
-        window.addEventListener('resize', this.handleWindowResize);
-
-        if(this.sufrace){
-            console.log("[NodusCanvas] Surface ready, starting loop");
-            this.startLoop();
-        } else {
-            console.warn("[NodusCanvas] No surface after resize!");
-        }
-
-    }
-
-    private handleWindowResize = () => {
-        if (this.resizeTimeout) {
-            clearTimeout(this.resizeTimeout);
-        }
-        this.resizeTimeout = window.setTimeout(() => {
-            this.resize();
-        }, 100);
-    }
-
-    private render = () => {
-
-        if (this.isResizing[0]()){
-            this.animationFrameId = requestAnimationFrame(this.render);
-            return;
-        }
-
-        if (!this.sufrace || !this.draw) {
-            this.animationFrameId = requestAnimationFrame(this.render);
+        this.animationFrameId = requestAnimationFrame(() => this.startLoop());
+        
+        if(this.isResizing[0]()) return;
+        if(!this.sufrace || !this.draw){
             return;
         }
 
         try {
             const canvas = this.sufrace.getCanvas();
-            
-            // 1. Limpiar el lienzo (coordenadas de pantalla, inmune a la matriz)
+
             canvas.clear(this.CK.parseColorString(userData.currentProjectProperties.backgroundColor || "#0A0E1A"));
-            
-            // 2. CRÍTICO: Guardar el estado limpio de la matriz antes de aplicar la cámara
+
             canvas.save();
-            
-            // 3. Aplicar la cámara (ahora se aplica de forma limpia desde el origen en cada frame)
+
             this.camera.applyToCanvas(canvas);
-            
-            // 4. EJECUTAR EL DIBUJO (Aquí corre tu draw del Editor)
-            this.draw(); 
-            
-            // 5. CRÍTICO: Restaurar la matriz original para que el siguiente frame empiece limpio
+
+            this.draw();
+
             canvas.restore();
-            
-            // 6. Enviar comandos a la GPU
+
             this.sufrace.flush();
-
-            this.animationFrameId = requestAnimationFrame(this.render);
-
-        } catch (error) {
-            console.error("💥 Catástrofe en el Render Loop de CanvasKit:", error);
-            this.handleCanvasCrash(error);
+        } catch(error){
+            console.error("[NodusCanvas] Error durante el renderizado: ", error);
         }
-    }
-
-    private startLoop(){        
-        this.render();
-    }
-
-    public pauseRenderLoop(){
-        if(this.animationFrameId){
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = 0;
-        }
-        this.isResizing[1](true);
-    }
-
-    public resumeRenderLoop(){
-        this.isResizing[1](false);
-        this.render();
     }
 
     async resize(){
-        if(this.isResizing[0]()) return;
-        this.pauseRenderLoop();
+
+        this.isResizing[1](true);
+
+        if(this.onRezise){
+            this.onRezise();
+        }
+
+        if(!this.CK || !this.canvasRef) return;
+
+        const cssWidth = window.innerWidth;
+        const cssHeight = window.innerHeight;
+        const dpr = this.camera.getDPR();
         
-        try {
-            invalidateAllResources();
-            invalidateParagraphCache();
+        this.canvasRef.width = cssWidth * dpr;
+        this.canvasRef.height = cssHeight * dpr;
 
-            if(this.sufrace){
+        if(this.sufrace){
+            try {
                 this.sufrace.delete();
-                this.sufrace = null;
+            } catch(e) {
+                console.warn("Error borrando la superficie antigua:", e);
             }
-
-            const cssWidth = window.innerWidth;
-            const cssHeight = window.innerHeight;
-            const dpr = this.camera.getDPR();
-
-
-            this.canvasRef.width = cssWidth * dpr;
-            this.canvasRef.height = cssHeight * dpr;
-            this.canvasRef.style.width = `${cssWidth}px`;
-            this.canvasRef.style.height = `${cssHeight}px`;
-
-            await this._createNewSurface();
-            
-            invalidateAllResources();
-            invalidateParagraphCache();
-            
-            this.resumeRenderLoop();
-        } catch (error) {
-            console.error("Error en resize:", error);
-            this.resumeRenderLoop();
+            this.sufrace = null;
         }
-    }
 
-    private async _createNewSurface(): Promise<void> {
-        console.log("[NodusCanvas] Creating new surface...");
+        this.sufrace = this.CK.MakeWebGLCanvasSurface(this.canvasRef);
 
-        await new Promise(resolve => setTimeout(resolve, 50));
-
-        try {
-            const newSurface = this.CK.MakeWebGLCanvasSurface(this.canvasRef, this.CK.ColorSpace.SRGB, {
-                antialias: 1,
-                depth: 1,
-                stencil: 1,
-                preserveDrawingBuffer: 0,
-                preferLowPowerToHighPerformance: 1,
-                failIfMajorPerformanceCaveat: 0,
-                enableExtensionsByDefault: 1,
-            });
-            
-            if (newSurface) {
-                console.log("[NodusCanvas] WebGL surface created");
-                this.sufrace = newSurface;
-                // Invalidar nuevamente por si acaso
-                invalidateAllResources();
-                invalidateParagraphCache();
-            } else {
-                console.warn("[NodusCanvas] WebGL surface failed, trying CPU fallback...");
-                throw new Error("WebGL surface creation failed");
-            }
-        } catch (e) {
-            console.warn("Fallback a CPU rendering");
-            const newSurfaceCPU = this.CK.MakeSWCanvasSurface(this.canvasRef);
-            if (newSurfaceCPU) {
-                console.log("[NodusCanvas] CPU surface created");
-                this.sufrace = newSurfaceCPU;
-                invalidateAllResources();
-                invalidateParagraphCache();
-            } else {
-                console.error("No se puede crear un contexto de dibujo");
-            }
+        if(!this.sufrace){
+            console.error("No se pudo crear la superficie");
+            return;
         }
+        
+        console.log(`[NodusCanvas] Resized de forma exitosa a: ${cssWidth}x${cssHeight} (DPR: ${dpr})`);
+
+        setTimeout(() => {
+            this.isResizing[1](false);
+        }, 200);
     }
 
     public setDraw(action: Function){
+        if(this.onRezise){
+            this.onRezise();
+        }
         this.draw = action;
+    }
+
+    public setOnResize(action: Function){
+        this.onRezise = action;
     }
 
     public getFont(){
@@ -327,22 +154,21 @@ class NodusCanvas {
         }
     }
 
+    public canDraw(){
+        return !this.isResizing[0]();
+    }
+
+
     public destroy(){
-        window.removeEventListener('resize', this.handleWindowResize);
+        this.isRunning = false;
+        if(this.animationFrameId){
+            cancelAnimationFrame(this.animationFrameId);
+        }
         if (this.resizeObserver) {
             this.resizeObserver.disconnect();
-            this.resizeObserver = null;
         }
-        if (this.resizeTimeout) {
-            clearTimeout(this.resizeTimeout);
-        }
-        cancelAnimationFrame(this.animationFrameId);
         if (this.sufrace) {
-            try {
-                this.sufrace.delete();
-            } catch (e) {
-                // Ignorar errores
-            }
+            this.sufrace.delete();
             this.sufrace = null;
         }
     }

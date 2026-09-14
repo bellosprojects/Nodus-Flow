@@ -25,7 +25,7 @@ const SUGGESTED_ROOM_PROPS = [
     "showCameraInfo",
     "version",
     "description",
-    "tags"
+    "enableDataFlowMode"
 ];
 
 export const ConfigPanel = () => {
@@ -42,9 +42,6 @@ export const ConfigPanel = () => {
         selectedNodes: selectedNodes().length,
     }));
 
-    console.log(useUser().id());
-    console.log(activeUsers);
-
     // Usuarios conectados (excluyendo al actual)
     const otherUsers = createMemo(() => 
         activeUsers.filter(u => u.user_id !== useUser().id())
@@ -56,7 +53,6 @@ export const ConfigPanel = () => {
     const roomProperties = () => {
         const props: RoomProperty[] = [];
         const { currentProjectProperties } = userData;
-        console.log("Memo ejecutado, propiedades:", currentProjectProperties);
         Object.keys(currentProjectProperties).forEach(key => {
             props.push({ key, value: currentProjectProperties[key] });
         });

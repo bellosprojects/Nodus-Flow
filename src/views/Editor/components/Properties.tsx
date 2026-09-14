@@ -149,7 +149,6 @@ export const BaseProperties = (props: {node: Node}) => {
 
     const handleTitleBlur = (e: Event) => {
         const newTitle = (e.target as HTMLInputElement).value;
-        console.log(`Nodo ${node.id}: Titulo Cambiado de ${titleSnapshot} a ${newTitle}`);
         if (titleSnapshot !== newTitle) {
             actionUpdateNodeTitle(node.id, titleSnapshot, newTitle);
         }

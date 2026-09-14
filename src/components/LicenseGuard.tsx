@@ -31,13 +31,6 @@ export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
 
   return (
     <>
-      {/* Estado de carga */}
-      <Show when={isLoading()}>
-        <div class="license-loading">
-          <div class="spinner"></div>
-          <p>Verifying license...</p>
-        </div>
-      </Show>
       
       {/* Licencia inválida / expirada */}
       <Show when={!isLoading() && !licenseValid()}>

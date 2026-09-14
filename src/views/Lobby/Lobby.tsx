@@ -9,6 +9,8 @@ import { updateRoomId, userData } from "../../models/userStore";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { useLicense } from "../../services/license";
 import { onCleanup, onMount, Show } from "solid-js";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useUser } from "../../models/users";
 
 let mousePos = {
     x: 0,
@@ -40,11 +42,15 @@ function rebuildGridPaths(w: number, h: number, ck: CanvasKit) {
     const numVLines = Math.floor(w / step);
     const numHLines = Math.floor(h / step);
 
-    // Crear o limpiar paths
-    if (!verticalPath) verticalPath = new ck.Path();
-    else verticalPath.reset();
-    if (!horizontalPath) horizontalPath = new ck.Path();
-    else horizontalPath.reset();
+    if (verticalPath) {
+        verticalPath.delete();
+    }
+    verticalPath = new ck.Path();
+
+    if (horizontalPath) {
+        horizontalPath.delete();
+    }
+    horizontalPath = new ck.Path();
 
     // Construir líneas verticales
     for (let i = 0; i <= numVLines; i++) {
@@ -84,17 +90,21 @@ function rebuildGridPaths(w: number, h: number, ck: CanvasKit) {
         ck.TileMode.Clamp
     );
 
+    if(gridPaint){
+        gridPaint.delete();
+    }
+
     // Paint para la cuadrícula (se reutiliza)
-    if (!gridPaint) {
-        gridPaint = new ck.Paint();
-        gridPaint.setStyle(ck.PaintStyle.Stroke);
-        gridPaint.setStrokeWidth(2);
-    }
+    gridPaint = new ck.Paint();
+    gridPaint.setStyle(ck.PaintStyle.Stroke);
+    gridPaint.setStrokeWidth(2);
+    
     // Paint para los rectángulos
-    if (!rectPaint) {
-        rectPaint = new ck.Paint();
-        rectPaint.setStyle(ck.PaintStyle.Fill);
+    if (rectPaint){
+        rectPaint.delete();
     }
+    rectPaint = new ck.Paint();
+    rectPaint.setStyle(ck.PaintStyle.Fill);
 
     lastW = w;
     lastH = h;
@@ -261,14 +271,17 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
         rebuildGridPaths(window.innerWidth, window.innerHeight, nodusCanvas.getCK());
     }
 
+    const appWindow = getCurrentWindow();
+
     onMount(() => {
+
+        appWindow.setTitle(`Nodus Flow - ${useUser().name()}`);
+
         rebuildGridPaths(window.innerWidth, window.innerHeight, nodusCanvas.getCK());
 
-        window.addEventListener('resize', rebuildBgOnResize);
     });
 
     onCleanup(() => {
-        window.removeEventListener('resize', rebuildBgOnResize);
 
         verticalPath?.delete();
         horizontalPath?.delete();
@@ -276,12 +289,23 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
         rectPaint?.delete();
         shader1?.delete();
         shader2?.delete();
+
+        verticalPath = null;
+        horizontalPath = null;
+        gridPaint = null;
+        rectPaint = null;
+        shader1 = null;
+        shader2 = null;
     })
 
     nodus.setDraw(() => {
         drawInfiniteFloor(nodusCanvas.getCanvas(), nodusCanvas.getCK());
         drawGrid(mousePos);
     });
+
+    nodus.setOnResize(() => {
+        rebuildBgOnResize();
+    })
 
     const startFlow = () => {
         const newDiagramId = generateRandomRoomId();
@@ -302,7 +326,10 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
     };
 
     setViewMouseHandlers({
-        onMove: (e) => mousePos = {x: e.offsetX, y: e.offsetY}
+        onMove: (e) => {
+            const pos = {x: e.offsetX, y: e.offsetY};
+            mousePos = nodusCanvas.camera.screenToWordl(pos.x, pos.y);
+        }
     })
 
     nodusCanvas.camera.setOffsetX(0);

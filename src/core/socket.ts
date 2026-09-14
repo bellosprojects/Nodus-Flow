@@ -4,6 +4,7 @@ import { userData } from "../models/userStore";
 import { removeToast, showToast, ToastType } from "../models/toast";
 import { authStore } from "../models/authStore";
 import { randomColor } from "../utils/color";
+import { setIsAppLoading, setLoadingAppMessage } from "../views/components/Transition";
 
 export let initToastId : number | null = null;
 
@@ -26,7 +27,8 @@ class WebSocketService {
 
     public initSocket() {
 
-        initToastId = showToast("Cargando Sala", ToastType.PROCESSING);
+        setIsAppLoading(true);
+        setLoadingAppMessage("Cargando Sala...");
 
         // Evitar múltiples conexiones simultáneas
         if (this.isConnecting) return;

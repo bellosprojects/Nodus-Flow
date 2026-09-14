@@ -12,12 +12,13 @@ import { LicenseGuard } from "./components/LicenseGuard";
 import { Login } from "./views/Auth/Login";
 import { Signup } from "./views/Auth/Singup";
 import { authStore } from "./models/authStore";
+import { LOADER } from "./views/components/Transition";
 
 const startView : 'lobby' | 'editor' = 'lobby';
 
-function NodusFlowApp() {
+function NodusFlowApp(props: {started: boolean}) {
 
-    const [currentView, setCurrentView] = createSignal<'lobby' | 'editor'>(startView);
+    const [currentView, setCurrentView] = createSignal<'lobby' | 'editor'>(props.started? 'editor' : startView);
     let canvasRef : HTMLCanvasElement | undefined;
 
     onMount(async () => {
@@ -36,17 +37,6 @@ function NodusFlowApp() {
         setCurrentView(view);
     };
 
-    onOpenUrl((urls) => {
-        const url = new URL(urls[0]);
-        const id = url.searchParams.get('id');
-
-        if(id){
-            showToast(`Cargando sala: ${id}`);
-            updateRoomId(id);
-            setCurrentView('editor');
-        }
-    });
-
     return (
         <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
         
@@ -58,8 +48,10 @@ function NodusFlowApp() {
                     display: "block",
                     outline: "none",
                     "touch-action": "none",
+                    width: "100%",
+                    height: "100%",
                     filter: nodusCanvas.isResizing[0]()? "blur(20px)" : "none",
-                    transition: "filter 0.4s ease"
+                    transition: "filter 0.5s ease"
                 }}
             />
 
@@ -101,7 +93,10 @@ function AuthRouter() {
 }
 
 function App() {
+
     const isAuthenticated = createMemo(() => authStore.isAuthenticated);
+
+    const [isExternalOpen, setIsExternalOpen] = createSignal(false);
 
     onMount(() => {
         initializeGlobalKeyboardEvents();
@@ -109,14 +104,31 @@ function App() {
 
     onCleanup(() => {
         removeGlobalKeyboardEvents();
-    })
+    });
+
+    onOpenUrl((urls) => {
+
+        console.log(urls);
+
+        const url = new URL(urls[0]);
+        const id = url.searchParams.get('id');
+
+        if(id){
+            showToast(`Cargando sala: ${id}`);
+            updateRoomId(id);
+            setIsExternalOpen(true);
+        }
+    });
 
     return (
-        <Show when={isAuthenticated()} fallback={<AuthRouter />}>
-            <LicenseGuard>
-                <NodusFlowApp />
-            </LicenseGuard>
-        </Show>
+        <>
+            <LOADER />
+            <Show when={isAuthenticated()} fallback={<AuthRouter />}>
+                <LicenseGuard>
+                    <NodusFlowApp started={isExternalOpen()}/>
+                </LicenseGuard>
+            </Show>
+        </>
     );
 }
 

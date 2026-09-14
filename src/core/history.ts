@@ -53,7 +53,6 @@ export const rollbackTransaction = () => {
 }
 
 export const pushAction = (action: HistoryItem) => {
-    console.log("Registrado Evento", action.label);
     if(isTransactionActive){
         transactionActions.push(action);
     } else {

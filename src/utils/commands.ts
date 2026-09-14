@@ -147,6 +147,7 @@ import { setConnections, Connection } from "../models/connections";
 import { wsService } from "../core/socket";
 import { generarUUID } from "./math";
 import { generateMRFromER } from "./MRFromER";
+import { invoke } from "@tauri-apps/api/core";
 
 export const importFromQuery = (_?: string) => {
     try {
@@ -310,7 +311,6 @@ export const importFromQuery = (_?: string) => {
                                         addCurrentProjectProperty(key, undefined);
                                     }
                                 }
-                                nodusCanvas.requestRedraw();
                             },
                             redo: () => {
                                 // Re-importar
@@ -320,7 +320,6 @@ export const importFromQuery = (_?: string) => {
                                 for (const [key, value] of Object.entries(projectProperties)) {
                                     addCurrentProjectProperty(key, value);
                                 }
-                                nodusCanvas.requestRedraw();
                                 // Re-enviar al servidor los nodos y conexiones
                                 importedNodes.forEach(node => {
                                     wsService.sendEvent({
@@ -360,7 +359,6 @@ export const importFromQuery = (_?: string) => {
                         commitTransaction();
                         
                         // Invalidar caches de renderizado
-                        nodusCanvas.requestRedraw();
                         
                         showToast(`Importado: ${importedNodes.length} nodos, ${importedConnections.length} conexiones`, ToastType.SUCCES);
                         
@@ -426,4 +424,40 @@ export const generate = (query?: string) => {
         generateMRFromER();
     }
 
+}
+
+export const setZoomFromCommand = (query?: string) => {
+
+    if(!query) return;
+
+    const userZoom = query.split(/\s+/)[0];
+
+    try {
+
+        const numericZoom = parseFloat(userZoom);
+
+        if(!numericZoom || numericZoom < 0.1 || numericZoom > 5){
+            showToast("Zoom fuera de rango", ToastType.ERROR);
+            return;
+        }
+
+        nodusCanvas.camera.setZoom(numericZoom);
+
+    } catch {
+        showToast("Zoom invalido", ToastType.ERROR);
+    }
+}
+
+export const evalValueFromCommand = async (query?: string) => {
+
+    if(!query) return;
+
+    try {
+        const response = await invoke<string>('eval_heza', { expr: query });
+        console.log("Heza Response:", response);
+        return response;
+    } catch (error) {
+        console.error("Error al comunicarse con Heza:", error);
+        return "Error";
+    }
 }

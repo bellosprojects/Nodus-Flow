@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { nodes, selectedNodesIds, selectedNodes } from "../models/nodes";
-import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
+import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setIsPRessedEspace, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
 import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette/CommandPalette";
 import { activeUsers, useUser } from "../models/users";
 import { addPing } from "../models/ping";
@@ -11,14 +11,14 @@ async function fullScreenEvent(e: KeyboardEvent){
 
     const appWindow = getCurrentWindow();
 
-    if(e.key === 'F11'){
+    if(e.key === 'F11' || (e.key == 'f' && e.ctrlKey)){
         const isFullScreen = await appWindow.isFullscreen();
         await appWindow.setFullscreen(!isFullScreen);
     }
 };
 
 function deleteSelectedNodesEvent(e: KeyboardEvent){
-    if(e.key === 'Delete'){
+    if(e.key === 'Delete' || e.key === 'Backspace'){
         actionDeleteSelectedNodes();
     }
 }
@@ -34,7 +34,7 @@ function openCommandPaletteEvent(e: KeyboardEvent){
 }
 
 function pingEvent(e: KeyboardEvent){
-    if(e.key === ' '){
+    if(e.key === 'p'){
         if(e.repeat) return;
 
         const target = e.target as HTMLElement;
@@ -92,29 +92,37 @@ function navigateCommandPaletteEvent(e: KeyboardEvent){
 
 function mousesOptionEvents(e: KeyboardEvent){
 
-    if(e.ctrlKey || e.metaKey){
+    if(e.key === 'h'){
         e.preventDefault();
-        if(e.key === 'm'){
-            setMouseOption('move');
-        } else if(e.key === 's'){
-            setMouseOption('select');
-        } else if(e.key === 'c'){
-            setMouseOption('connect');
-        }
+        setMouseOption('move');
+    } else if(e.key === 'v'){
+        e.preventDefault();
+        setMouseOption('select');
+    } else if(e.key === 'c'){
+        e.preventDefault();
+        setMouseOption('connect');
     }
 }
 
 function nodeSelectionsEvent(e: KeyboardEvent){
 
     if(e.ctrlKey || e.metaKey){
+
         e.preventDefault();
+
         if(e.key === 'a'){
-            actionSelectAll();
-        } else if(e.key === 'd'){
-            actionSelectNone();
-        } else if(e.key === 'i'){
+            if (e.shiftKey) {
+                actionSelectNone();
+            } else {
+                actionSelectAll();
+            }
+        } 
+        
+        else if(e.key === 'i'){
             actionInvertSelection();
-        } else if(e.key === 'u'){
+        } 
+        
+        else if(e.key === 'u' && e.shiftKey){
             actionSelectUnconnected();
         }
     }
@@ -125,7 +133,7 @@ function extraShortCuts(e: KeyboardEvent){
         e.preventDefault();
         if(e.key === 'l'){
             setIsLayersPanelOpen(prev => !prev);
-        } else if(e.key === 'p'){
+        } else if(e.key === 'p' && e.shiftKey){
             setIsEditPanelOpen(prev => !prev);
         }
     }
@@ -144,6 +152,20 @@ function historyListeners(e : KeyboardEvent){
     }
 }
 
+function DetectKeysDown(e: KeyboardEvent){
+    if(e.key === ' '){
+        e.preventDefault();
+        setIsPRessedEspace(true);
+    }
+}
+
+function DetectKeysUp(e: KeyboardEvent){
+    if(e.key === ' '){
+        e.preventDefault();
+        setIsPRessedEspace(false);
+    }
+}
+
 export const initializeEditorKeyboardEvents = () => {
     window.addEventListener('keydown', historyListeners);
     window.addEventListener('keydown', deleteSelectedNodesEvent)
@@ -153,6 +175,9 @@ export const initializeEditorKeyboardEvents = () => {
     window.addEventListener('keydown', mousesOptionEvents);
     window.addEventListener('keydown', nodeSelectionsEvent);
     window.addEventListener('keydown', extraShortCuts);
+
+    window.addEventListener('keydown', DetectKeysDown);
+    window.addEventListener('keyup', DetectKeysUp);
 };
 
 export const removeEditorKeyboardEvents = () => {
@@ -164,6 +189,9 @@ export const removeEditorKeyboardEvents = () => {
     window.removeEventListener('keydown', mousesOptionEvents);
     window.removeEventListener('keydown', nodeSelectionsEvent); 
     window.removeEventListener('keydown', extraShortCuts); 
+
+    window.removeEventListener('keydown', DetectKeysDown); 
+    window.removeEventListener('keyup', DetectKeysUp); 
 };
 
 export const initializeGlobalKeyboardEvents = () => {

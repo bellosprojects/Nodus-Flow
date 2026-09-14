@@ -115,7 +115,7 @@ export const createCameraStore = () => {
 
     const animateTo = (targetOffsetX: number, targetOffsetY: number, targetZoom: number, duration: number = 420) => {
         const startX = offsetX();
-        const startY = offsetY();
+        const startY = offsetY(); 
         const startZoom = zoom();
         const startTime = Date.now();
         

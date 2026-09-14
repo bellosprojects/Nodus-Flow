@@ -66,8 +66,6 @@ export const deleteCurrentProjectProperty = (propertyName: string, send = true) 
 
     setUserData("currentProjectProperties", properties);
 
-    console.log("Nuevas propiedades:", userData.currentProjectProperties);
-
     if(send){
         wsService.sendEvent({
             'tipo': 'deletear_proyecto_property',

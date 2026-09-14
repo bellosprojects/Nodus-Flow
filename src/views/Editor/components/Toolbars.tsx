@@ -8,6 +8,7 @@ import layersIco from "../../../assets/layers.svg";
 import terminalIco from "../../../assets/terminal.svg";
 import configIco from "../../../assets/settings.svg";
 import autosaveIco from "../../../assets/autosave.svg";
+import playIco from "../../../assets/play.svg";
 
 import textIco from "../../../assets/text-adjust.svg";
 import copyIco from "../../../assets/copy.svg";
@@ -27,6 +28,7 @@ import {
     isConfigPanelOpen, 
     isEditPanelOpen, 
     isLayersPanelOpen, 
+    isPressedEspace, 
     mouseOption, 
     setIsAutosavePAnelopen, 
     setIsCommandPaletteOpen, 
@@ -50,6 +52,7 @@ import {
 } from "../../../models/nodes";
 import { redoStack, undoStack } from "../../../core/history";
 import { userData } from "../../../models/userStore";
+import { initDataFlow } from "../../../core/dataFlow";
 
 
 export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => {
@@ -69,15 +72,17 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
                 actionCreateNode(point.x - 80, point.y - 40);
             }}></div>
 
-            <img src={selectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'select' ? styles.selected : ""}`} onClick={(_) => setMouseOption('select')}/>
+            <img src={selectIco} alt="" class={`${styles.barItem} ${(mouseOption() == 'select' && !isPressedEspace())? styles.selected : ""}`} onClick={(_) => setMouseOption('select')}/>
 
-            <img src={dragIco} alt="" class={`${styles.barItem} ${mouseOption() == 'move'? styles.selected : ""}`} onClick={(_) => setMouseOption('move')}/>
+            <img src={dragIco} alt="" class={`${styles.barItem} ${(mouseOption() == 'move' || isPressedEspace())? styles.selected : ""}`} onClick={(_) => setMouseOption('move')}/>
 
-            <img src={connectIco} alt="" class={`${styles.barItem} ${mouseOption() == 'connect' ? styles.selected : ""}`} onClick={(_) => setMouseOption('connect')}/>
+            <img src={connectIco} alt="" class={`${styles.barItem} ${(mouseOption() == 'connect' && !isPressedEspace())? styles.selected : ""}`} onClick={(_) => setMouseOption('connect')}/>
 
             <div class={styles.separator} />
 
             <img src={configIco} alt="" classList={{[styles.barItem]: true, [styles.selected]: isConfigPanelOpen()}} onClick={(_) => setIsConfigPanelOpen(prev => !prev)} />
+
+            <img src={playIco} alt="" class={styles.barItem} onClick={(_) => initDataFlow()} style={{display: userData.currentProjectProperties.enableDataFlowMode ? 'block' : 'none'}}/>
 
             <img src={autosaveIco} alt="" class={styles.barItem} onClick={() => {
                 setIsAutosavePAnelopen(prev => !prev);
@@ -86,7 +91,6 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
             <img src={fullScreenIco} alt="" class={styles.barItem} onClick={onFullScreen}/>
 
             <img src={homeIco} alt="" class={styles.barItem} onClick={onHome}/>
-
 
         </div>
     );
