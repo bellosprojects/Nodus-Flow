@@ -17,7 +17,17 @@ async function fullScreenEvent(e: KeyboardEvent){
     }
 };
 
+const isTyping = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+
+    return isTyping;
+}
+
 function deleteSelectedNodesEvent(e: KeyboardEvent){
+
+    if(isTyping(e)) return;
+
     if(e.key === 'Delete' || e.key === 'Backspace'){
         actionDeleteSelectedNodes();
     }
@@ -34,6 +44,9 @@ function openCommandPaletteEvent(e: KeyboardEvent){
 }
 
 function pingEvent(e: KeyboardEvent){
+
+    if(isTyping(e)) return;
+
     if(e.key === 'p'){
         if(e.repeat) return;
 
@@ -91,6 +104,8 @@ function navigateCommandPaletteEvent(e: KeyboardEvent){
 }
 
 function mousesOptionEvents(e: KeyboardEvent){
+
+    if(isTyping(e)) return;
 
     if(e.key === 'h'){
         e.preventDefault();
@@ -153,6 +168,9 @@ function historyListeners(e : KeyboardEvent){
 }
 
 function DetectKeysDown(e: KeyboardEvent){
+
+    if(isTyping(e)) return;
+
     if(e.key === ' '){
         e.preventDefault();
         setIsPRessedEspace(true);
@@ -160,6 +178,9 @@ function DetectKeysDown(e: KeyboardEvent){
 }
 
 function DetectKeysUp(e: KeyboardEvent){
+
+    if(isTyping(e)) return;
+
     if(e.key === ' '){
         e.preventDefault();
         setIsPRessedEspace(false);

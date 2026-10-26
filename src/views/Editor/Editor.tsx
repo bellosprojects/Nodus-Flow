@@ -50,6 +50,7 @@ import {
     actionSetConnectionProperty,
     actionChangeConnectionStyle,
     actionCreateNode,
+    actionChangeNodeStyle,
 } from "../../core/actions";
 
 import { 
@@ -465,10 +466,26 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         nodesMoveSnapshot = [];
     };
 
+    const handleRightClickMouseDown = (e : MouseEvent) => {
+
+        const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY)
+
+        const hit = [...nodes].reverse().find(n => 
+            x >= n.x && x <= n.x + n.width &&
+            y >= n.y && y <= n.y + n.height
+        );
+
+        if(hit){
+            actionChangeNodeStyle(hit.id, hit.style, (hit.style + 1) % 2);
+        }
+
+    };
+
     setViewMouseHandlers({
-        onClick: handleMouseDown,
+        onLeftClick: handleMouseDown,
         onMove: handleMouseMove,
-        onUp: handleMouseUp
+        onUp: handleMouseUp,
+        onRightClick: handleRightClickMouseDown
     });
 
     onMount(async () => {
@@ -579,7 +596,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 // Grid solo para nodo seleccionado único y visible
                 if(selectedNodesIds().length === 1){
                     const node = selectedNodes()[0];
-                    if(node && isNodeVisible(node)){
+                    if(node && isNodeVisible(node) && userData.currentProjectProperties.showNodeLines){
                         drawNodeGrid(CK, node);
                     }
                 }

@@ -4,6 +4,7 @@ import { mouseEvents } from "../utils/mouse";
 import { createCameraStore } from "./camera";
 import { userData } from "../models/userStore";
 import { createSignal } from "solid-js";
+import { setIsPRessedEspace } from "../views/Editor/Editor";
 
 class NodusCanvas {
     private CK!: CanvasKit;
@@ -22,10 +23,30 @@ class NodusCanvas {
         console.log("[NodusCanvas] Init started");
         this.canvasRef = canvasElement;
 
-        // Usar capture: true para mejor rendimiento en eventos
-        this.canvasRef.addEventListener("mousedown", (e) => mouseEvents.onClick(e));
+        this.canvasRef.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+
+            if(e.button == 0){
+                mouseEvents.onLeftClick(e);
+            } else if (e.button == 1) {
+                setIsPRessedEspace(true);
+                mouseEvents.onLeftClick(e);
+            } else if (e.button == 2) {
+                mouseEvents.onRightClick(e);
+            }
+        });
         this.canvasRef.addEventListener("mousemove", (e) => mouseEvents.onMove(e));
-        this.canvasRef.addEventListener("mouseup", (e) => mouseEvents.onUp(e));
+        this.canvasRef.addEventListener("mouseup", (e) => {
+
+            e.preventDefault();
+
+            if(e.button == 0){
+                mouseEvents.onUp(e);
+            } else if (e.button == 1) {
+                setIsPRessedEspace(false);
+                mouseEvents.onUp(e);
+            }
+        });
 
         this.CK = await CanvasKitInit({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.39.1/bin/${file}`

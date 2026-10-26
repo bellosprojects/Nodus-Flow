@@ -99,6 +99,9 @@ export const ocupar = (id:string | null) => {
 
 export const addNode = (x: number, y : number, name? : string) => {
 
+    x = snapToGrid(x);
+    y = snapToGrid(y);
+
     const newID = generarUUID();
 
     const newNode: Node = {

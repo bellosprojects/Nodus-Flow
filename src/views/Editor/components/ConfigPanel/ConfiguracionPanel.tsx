@@ -25,7 +25,8 @@ const SUGGESTED_ROOM_PROPS = [
     "showCameraInfo",
     "version",
     "description",
-    "enableDataFlowMode"
+    "enableDataFlowMode",
+    "showNodeLines"
 ];
 
 export const ConfigPanel = () => {

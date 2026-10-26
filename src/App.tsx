@@ -1,8 +1,8 @@
 import { Lobby } from "./views/Lobby/Lobby";
-import { createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createEffect, createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { Editor } from "./views/Editor/Editor";
 import { nodusCanvas } from "./core/NodusCanvas";
-import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { showToast } from "./models/toast";
 import { updateRoomId } from "./models/userStore";
 import { initializeGlobalKeyboardEvents, removeGlobalKeyboardEvents } from "./utils/keyboard";
@@ -20,6 +20,12 @@ function NodusFlowApp(props: {started: boolean}) {
 
     const [currentView, setCurrentView] = createSignal<'lobby' | 'editor'>(props.started? 'editor' : startView);
     let canvasRef : HTMLCanvasElement | undefined;
+
+    createEffect(() => {
+        if (props.started) {
+            setCurrentView('editor');
+        }
+    });
 
     onMount(async () => {
         if(canvasRef){
@@ -106,18 +112,51 @@ function App() {
         removeGlobalKeyboardEvents();
     });
 
-    onOpenUrl((urls) => {
+    const handleDeepLinks = (urls: string[]) => {
+        console.log("[deeplink] URL received", urls);
 
-        console.log(urls);
+        for (const value of urls) {
+            let url: URL;
 
-        const url = new URL(urls[0]);
-        const id = url.searchParams.get('id');
+            try {
+                url = new URL(value);
+            } catch (error) {
+                console.error("[deeplink] Invalid URL", value, error);
+                continue;
+            }
 
-        if(id){
-            showToast(`Cargando sala: ${id}`);
-            updateRoomId(id);
-            setIsExternalOpen(true);
+            const id = url.searchParams.get('id') ?? url.searchParams.get('d');
+
+            if (id) {
+                showToast(`Cargando sala: ${id}`);
+                updateRoomId(id);
+                setIsExternalOpen(true);
+                return;
+            }
         }
+    };
+
+    onMount(() => {
+        let unlisten: (() => void) | undefined;
+        let disposed = false;
+
+        const setupDeepLinks = async () => {
+            unlisten = await onOpenUrl(handleDeepLinks);
+
+            const currentUrls = await getCurrent();
+            if (!disposed && currentUrls?.length) {
+                handleDeepLinks(currentUrls);
+            }
+        };
+
+        void setupDeepLinks().catch((error) => {
+            console.error("[deeplink] Failed to initialize deep-link listener", error);
+        });
+
+        onCleanup(() => {
+            disposed = true;
+            unlisten?.();
+        });
     });
 
     return (

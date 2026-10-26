@@ -3,22 +3,25 @@ import { createStore } from "solid-js/store";
 type MouseHandler = (e: MouseEvent) => void;
 
 interface MouseState {
-    onClick: MouseHandler,
+    onLeftClick: MouseHandler,
     onMove: MouseHandler,
-    onUp: MouseHandler
+    onUp: MouseHandler,
+    onRightClick: MouseHandler
 }
 
 const [mouseEvents, setMouseEvents] = createStore<MouseState>({
-    onClick: () => {},
+    onLeftClick: () => {},
     onMove: () => {},
-    onUp: () => {}
+    onUp: () => {},
+    onRightClick: () => {}
 });
 
 export const setViewMouseHandlers = (handlers: Partial<MouseState>) => {
     setMouseEvents({
-        onClick: handlers.onClick || (() => {}),
+        onLeftClick: handlers.onLeftClick || (() => {}),
         onMove: handlers.onMove || (() => {}),
-        onUp: handlers.onUp || (() => {})
+        onUp: handlers.onUp || (() => {}),
+        onRightClick: handlers.onRightClick || (() => {})
     });
 };
 
