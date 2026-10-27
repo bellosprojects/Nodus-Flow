@@ -97,10 +97,12 @@ export const ocupar = (id:string | null) => {
     return true;
 }
 
-export const addNode = (x: number, y : number, name? : string) => {
+export const addNode = (x: number, y : number, name?: string, width = 160, height = 80) => {
 
     x = snapToGrid(x);
     y = snapToGrid(y);
+    width = snapToGrid(Math.max(60, width));
+    height = snapToGrid(Math.max(40, height));
 
     const newID = generarUUID();
 
@@ -108,8 +110,8 @@ export const addNode = (x: number, y : number, name? : string) => {
         id: newID,
         x,
         y,
-        width: 160,
-        height: 80,
+        width,
+        height,
         color: "#21a2a6",
         opacity: 1,
         radius: 8,
@@ -125,8 +127,8 @@ export const addNode = (x: number, y : number, name? : string) => {
         tipo: "nuevo_nodo",
         nodo: {
             id: newID,
-            w: 160, 
-            h: 80,
+            w: width,
+            h: height,
             x: x,
             y: y,
             texto: name || "",
@@ -246,13 +248,13 @@ export const updateNodoAbsolutePosition = (id:string, x:number, y:number) => {
     );
 }
 
-export const finalizeNodePosition = (id: string) => {
+export const finalizeNodePosition = (id: string, snapToGridPosition = true) => {
 
     const node = nodes.find(n => n.id === id);
 
     if(node){
-        const newX = snapToGrid(node.x);
-        const newY = snapToGrid(node.y);
+        const newX = snapToGridPosition ? snapToGrid(node.x) : node.x;
+        const newY = snapToGridPosition ? snapToGrid(node.y) : node.y;
 
         setNodes(
             (n) => n.id === id,

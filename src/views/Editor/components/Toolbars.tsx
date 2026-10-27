@@ -40,11 +40,6 @@ import {
 
 import { nodusCanvas } from '../../../core/NodusCanvas';
 
-import { 
-    actionCreateNode
-} from '../../../core/actions';
-
-
 import {
     selectedNodes, 
     selectedNodesIds, 
@@ -67,10 +62,11 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
 
             <div class={styles.separator} />
 
-            <div class={styles.square} onClick={() => {
-                const point = nodusCanvas.camera.getWorldCenter();
-                actionCreateNode(point.x - 80, point.y - 40);
-            }}></div>
+            <div
+                classList={{[styles.square]: true, [styles.active]: mouseOption() === 'create'}}
+                title="Create node (N)"
+                onClick={() => setMouseOption('create')}
+            ></div>
 
             <img src={selectIco} alt="" class={`${styles.barItem} ${(mouseOption() == 'select' && !isPressedEspace())? styles.selected : ""}`} onClick={(_) => setMouseOption('select')}/>
 

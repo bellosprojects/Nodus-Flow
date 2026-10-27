@@ -437,6 +437,52 @@ export const drawNodeGrid = (CK: CanvasKit, node: Node) => {
     canvas.drawLine(startX, node.y + node.height, endX, node.y + node.height, paint);
 };
 
+export const drawSnapGuides = (
+    CK: CanvasKit,
+    guides: {axis: "x" | "y", position: number, from: {x: number, y: number}, to: {x: number, y: number}}[]
+) => {
+    if(!nodusCanvas.canDraw() || guides.length === 0) return;
+
+    const canvas = nodusCanvas.getCanvas();
+    const zoom = nodusCanvas.camera.zoom();
+    const startX = -nodusCanvas.camera.offsetX() / zoom;
+    const startY = -nodusCanvas.camera.offsetY() / zoom;
+    const endX = startX + nodusCanvas.camera.getWordlSize().width;
+    const endY = startY + nodusCanvas.camera.getWordlSize().height;
+
+    const paint = getPaint(CK, "snap_alignment_guides", p => {
+        p.setStyle(CK.PaintStyle.Stroke);
+        p.setStrokeWidth(1 / zoom);
+        p.setAntiAlias(true);
+        p.setColor(CK.Color(56, 189, 248, 0.9));
+    });
+
+    const verticalPositions = new Set<number>();
+    const horizontalPositions = new Set<number>();
+    const anchorPositions = new Map<string, {x: number, y: number}>();
+    for(const guide of guides){
+        if(guide.axis === "x"){
+            verticalPositions.add(guide.position);
+        } else {
+            horizontalPositions.add(guide.position);
+        }
+
+        for(const point of [guide.from, guide.to]){
+            anchorPositions.set(`${point.x.toFixed(3)},${point.y.toFixed(3)}`, point);
+        }
+    }
+
+    verticalPositions.forEach(x => canvas.drawLine(x, startY, x, endY, paint));
+    horizontalPositions.forEach(y => canvas.drawLine(startX, y, endX, y, paint));
+
+    const anchorPaint = getPaint(CK, "snap_alignment_anchors", p => {
+        p.setStyle(CK.PaintStyle.Fill);
+        p.setAntiAlias(true);
+        p.setColor(CK.Color(56, 189, 248, 0.95));
+    });
+    anchorPositions.forEach(point => canvas.drawCircle(point.x, point.y, 3 / zoom, anchorPaint));
+};
+
 export enum ANCHOR_POINT{
     TOP = "TOP",
     BOTTOM = "BOTTOM",

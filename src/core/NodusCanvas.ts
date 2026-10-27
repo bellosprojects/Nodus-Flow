@@ -17,11 +17,17 @@ class NodusCanvas {
     public camera = createCameraStore();
     private resizeObserver: ResizeObserver | null = null;
     private isRunning: boolean = false;
+    private viewportWidth = 0;
+    private viewportHeight = 0;
+    private viewportResizeTimeout: number | null = null;
+    private viewportCenterWorld: {x: number, y: number} | null = null;
     public isResizing = createSignal(false);
 
     async init(canvasElement: HTMLCanvasElement){
         console.log("[NodusCanvas] Init started");
         this.canvasRef = canvasElement;
+        this.viewportWidth = window.innerWidth;
+        this.viewportHeight = window.innerHeight;
 
         this.canvasRef.addEventListener("mousedown", (e) => {
             e.preventDefault();
@@ -35,6 +41,7 @@ class NodusCanvas {
                 mouseEvents.onRightClick(e);
             }
         });
+        this.canvasRef.addEventListener("dblclick", (e) => mouseEvents.onDoubleClick(e));
         this.canvasRef.addEventListener("mousemove", (e) => mouseEvents.onMove(e));
         this.canvasRef.addEventListener("mouseup", (e) => {
 
@@ -106,6 +113,31 @@ class NodusCanvas {
         const cssWidth = window.innerWidth;
         const cssHeight = window.innerHeight;
         const dpr = this.camera.getDPR();
+
+        if(cssWidth !== this.viewportWidth || cssHeight !== this.viewportHeight){
+            if(this.viewportResizeTimeout === null){
+                this.viewportCenterWorld = this.camera.screenToWordl(
+                    this.viewportWidth / 2,
+                    this.viewportHeight / 2
+                );
+            } else {
+                window.clearTimeout(this.viewportResizeTimeout);
+            }
+
+            this.viewportWidth = cssWidth;
+            this.viewportHeight = cssHeight;
+            this.viewportResizeTimeout = window.setTimeout(() => {
+                const center = this.viewportCenterWorld;
+                if(center){
+                    const zoom = this.camera.zoom();
+                    const target = this.camera.offsetToCenterPoint(center.x, center.y, zoom);
+                    this.camera.animateTo(target.offsetX, target.offsetY, zoom);
+                }
+
+                this.viewportCenterWorld = null;
+                this.viewportResizeTimeout = null;
+            }, 150);
+        }
         
         this.canvasRef.width = cssWidth * dpr;
         this.canvasRef.height = cssHeight * dpr;
@@ -182,6 +214,11 @@ class NodusCanvas {
 
     public destroy(){
         this.isRunning = false;
+        if(this.viewportResizeTimeout !== null){
+            window.clearTimeout(this.viewportResizeTimeout);
+            this.viewportResizeTimeout = null;
+        }
+        this.viewportCenterWorld = null;
         if(this.animationFrameId){
             cancelAnimationFrame(this.animationFrameId);
         }

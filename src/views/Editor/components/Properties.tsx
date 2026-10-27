@@ -10,7 +10,6 @@ import {
     updateNodePosition, 
     updateNodeRadius, 
     updateNodeSize, 
-    updateNodoTitle, 
     changeNodeStyle, 
     Node, 
     addNodeProperty 
@@ -24,7 +23,6 @@ import styles from "../Editor.module.css";
 import { addConnectionProperty, selectedConnection, selectedConnectionId } from "../../../models/connections";
 
 import { 
-    actionUpdateNodeTitle, 
     actionUpdateNodeColor, 
     actionUpdateNodeOpacity, 
     actionUpdateNodeRadius, 
@@ -134,24 +132,6 @@ export const BaseProperties = (props: {node: Node}) => {
         }
         finalizeNodePosition(node.id);
         ySnapshot = 0;
-    };
-
-    // Manejador para Title
-    let titleSnapshot = "";
-    const handleTitleFocus = () => {
-        titleSnapshot = node.title || "";
-    };
-
-    const handleTitleChange = (e: Event) => {
-        const newTitle = (e.target as HTMLInputElement).value;
-        updateNodoTitle(node.id, newTitle);
-    };
-
-    const handleTitleBlur = (e: Event) => {
-        const newTitle = (e.target as HTMLInputElement).value;
-        if (titleSnapshot !== newTitle) {
-            actionUpdateNodeTitle(node.id, titleSnapshot, newTitle);
-        }
     };
 
     // Manejador para Color
@@ -277,24 +257,6 @@ export const BaseProperties = (props: {node: Node}) => {
                             onBlur={handleYBlur}
                         />
                     </div>
-                </div>
-            </section>
-
-            <section class="prop-section">
-                <label>Tag</label>
-                <div class="input-group">
-                    <input type="text"
-                        autocomplete="off" 
-                        autocorrect="off" 
-                        autocapitalize="off" 
-                        spellcheck="false" 
-                        value={node.title || ""}
-                        placeholder="Enter a name..."
-                        onFocus={handleTitleFocus}
-                        onInput={handleTitleChange}
-                        onBlur={handleTitleBlur}
-                        style={{width: "100%", background: "transparent", border: "none", color: "white", outline: "none"}}
-                    />
                 </div>
             </section>
 

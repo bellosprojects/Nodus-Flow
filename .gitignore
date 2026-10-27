@@ -4,3 +4,4 @@
 /src-tauri/
 *.json
 *.ts
+!src/core/actions.ts

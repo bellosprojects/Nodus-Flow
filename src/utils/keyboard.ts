@@ -5,7 +5,17 @@ import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQu
 import { activeUsers, useUser } from "../models/users";
 import { addPing } from "../models/ping";
 import { performRedo, performUndo } from "../core/history";
-import { actionDeleteSelectedNodes, actionInvertSelection, actionSelectAll, actionSelectNone, actionSelectUnconnected } from "../core/actions";
+import {
+    actionCopySelectedNodes,
+    actionCutSelectedNodes,
+    actionDeleteSelectedNodes,
+    actionDuplicateSelectedNodes,
+    actionInvertSelection,
+    actionPasteNodes,
+    actionSelectAll,
+    actionSelectNone,
+    actionSelectUnconnected
+} from "../core/actions";
 
 async function fullScreenEvent(e: KeyboardEvent){
 
@@ -30,6 +40,29 @@ function deleteSelectedNodesEvent(e: KeyboardEvent){
 
     if(e.key === 'Delete' || e.key === 'Backspace'){
         actionDeleteSelectedNodes();
+    }
+}
+
+function clipboardShortcuts(e: KeyboardEvent){
+    if(isTyping(e) || !(e.ctrlKey || e.metaKey)) return;
+
+    switch(e.key.toLowerCase()){
+        case 'c':
+            e.preventDefault();
+            actionCopySelectedNodes();
+            break;
+        case 'x':
+            e.preventDefault();
+            actionCutSelectedNodes();
+            break;
+        case 'v':
+            e.preventDefault();
+            actionPasteNodes();
+            break;
+        case 'd':
+            e.preventDefault();
+            actionDuplicateSelectedNodes();
+            break;
     }
 }
 
@@ -116,6 +149,9 @@ function mousesOptionEvents(e: KeyboardEvent){
     } else if(e.key === 'c'){
         e.preventDefault();
         setMouseOption('connect');
+    } else if(e.key === 'n'){
+        e.preventDefault();
+        setMouseOption('create');
     }
 }
 
@@ -189,6 +225,7 @@ function DetectKeysUp(e: KeyboardEvent){
 
 export const initializeEditorKeyboardEvents = () => {
     window.addEventListener('keydown', historyListeners);
+    window.addEventListener('keydown', clipboardShortcuts);
     window.addEventListener('keydown', deleteSelectedNodesEvent)
     window.addEventListener('keydown', openCommandPaletteEvent);
     window.addEventListener('keydown', pingEvent);
@@ -203,6 +240,7 @@ export const initializeEditorKeyboardEvents = () => {
 
 export const removeEditorKeyboardEvents = () => {
     window.removeEventListener('keydown', historyListeners);
+    window.removeEventListener('keydown', clipboardShortcuts);
     window.removeEventListener('keydown', deleteSelectedNodesEvent)
     window.removeEventListener('keydown', openCommandPaletteEvent);
     window.removeEventListener('keydown', pingEvent);

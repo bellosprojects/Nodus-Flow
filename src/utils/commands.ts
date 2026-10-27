@@ -196,17 +196,17 @@ export const importFromQuery = (_?: string) => {
                             
                             const newNode: Node = {
                                 id: newId,
-                                x: nodeData.x || nodeData.x === 0 ? nodeData.x : 100,
-                                y: nodeData.y || nodeData.y === 0 ? nodeData.y : 100,
-                                width: nodeData.width || nodeData.w || 160,
-                                height: nodeData.height || nodeData.h || 80,
-                                color: nodeData.color || "#21a2a6",
-                                opacity: nodeData.opacity || nodeData.opacidad || 1,
-                                radius: nodeData.radius || 8,
-                                lock: nodeData.lock || nodeData.pin || false,
-                                title: nodeData.title || nodeData.texto || "",
-                                style: nodeData.style || 1,
-                                properties: nodeData.properties || {}
+                                x: nodeData.x ?? 100,
+                                y: nodeData.y ?? 100,
+                                width: nodeData.width ?? nodeData.w ?? 160,
+                                height: nodeData.height ?? nodeData.h ?? 80,
+                                color: nodeData.color ?? "#21a2a6",
+                                opacity: nodeData.opacity ?? nodeData.opacidad ?? 1,
+                                radius: nodeData.radius ?? 8,
+                                lock: nodeData.lock ?? nodeData.pin ?? false,
+                                title: nodeData.title ?? nodeData.texto ?? "",
+                                style: nodeData.style ?? 1,
+                                properties: nodeData.properties ?? {}
                             };
                             
                             // Asegurar dimensiones mínimas
@@ -243,22 +243,22 @@ export const importFromQuery = (_?: string) => {
                         const connectionsData = json.connections || json.conexiones || [];
                         
                         for (const connData of connectionsData) {
-                            const oldFromId = connData.from || connData.origenId;
-                            const oldToId = connData.to || connData.destinoId;
+                            const oldFromId = connData.from ?? connData.origenId;
+                            const oldToId = connData.to ?? connData.destinoId;
                             
                             const newFromId = nodeIdMap.get(oldFromId);
                             const newToId = nodeIdMap.get(oldToId);
                             
                             // Solo importar si ambos nodos existen
                             if (newFromId && newToId && newFromId !== newToId) {
-                                const newId = Math.random().toString(36).substring(6);
+                                const newId = generarUUID();
                                 
                                 const newConn: Connection = {
                                     id: newId,
                                     from: newFromId,
                                     to: newToId,
-                                    tipo: connData.tipo || connData.style || 1,
-                                    properties: connData.properties || {}
+                                    tipo: connData.tipo ?? connData.style ?? 1,
+                                    properties: connData.properties ?? {}
                                 };
                                 
                                 importedConnections.push(newConn);

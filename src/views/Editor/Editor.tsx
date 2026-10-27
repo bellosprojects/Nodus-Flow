@@ -1,6 +1,7 @@
 import { Properties } from "./components/Properties";
+import styles from "./Editor.module.css";
 import { CURRENT_POSITION, LAST_ACTIONS, LEFT_TOOLBAR, TOOL_BELT } from "./components/Toolbars";
-import { nodes, updateNodePosition, finalizeNodePosition, setNodes, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
+import { nodes, updateNodePosition, updateNodeSize, finalizeNodePosition, setNodes, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
 import { lerp } from "../../utils/math";
 import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
 import { connections, setConnections, setSelectedConnectionId } from "../../models/connections";
@@ -23,6 +24,7 @@ import {
     setFocusedPoint, 
     setResizingDots, 
     drawNodeGrid, 
+    drawSnapGuides,
     drawConnectionPoint, 
     setSourceAnchorPoint,
     invalidateAllResources,
@@ -40,7 +42,7 @@ import { ToastContainer } from "../components/ToastContainer";
 import { showToast } from "../../models/toast";
 import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../../utils/keyboard";
 import { manageResizing } from "../../utils/resizing";
-import { calculateDiagramBounds } from "../../utils/path";
+import { obtenerColorTexto } from "../../utils/color";
 
 import { 
     captureNodesSnapshot, 
@@ -51,6 +53,7 @@ import {
     actionChangeConnectionStyle,
     actionCreateNode,
     actionChangeNodeStyle,
+    actionUpdateNodeTitle,
 } from "../../core/actions";
 
 import { 
@@ -84,7 +87,7 @@ export const [resizingBox, setResizingBox] = createSignal<{x: number, y:number, 
 export let resizingNodesCopy: Node[] = [];
 export let nodesMoveSnapshot: { id: string; x: number; y: number; width: number; height: number }[] = [];
 
-export const [mouseOption, setMouseOption] = createSignal<'move' | 'select' | 'connect'>('select');
+export const [mouseOption, setMouseOption] = createSignal<'move' | 'select' | 'connect' | 'create'>('select');
 export const [layerView, setLayerView] = createSignal<'nodes' | 'connections'>('nodes');
 
 export const [mouseDisabled, setMouseDisables] = createSignal(false);
@@ -93,6 +96,112 @@ export let flowConecctions = 0;
 export let selectionRect = { x0: 0, y0: 0, x1: 0, y1: 0};
 export let mousePos = { x: 0, y: 0};
 export const [exportedMousePos, setExportedMousePos] = createSignal({x:0, y:0});
+type SnapGuide = {
+    axis: "x" | "y",
+    position: number,
+    from: {x: number, y: number},
+    to: {x: number, y: number}
+};
+
+const [snapPreview, setSnapPreview] = createSignal<{
+    nodeIds: string[],
+    offsetX: number,
+    offsetY: number,
+    guides: SnapGuide[]
+}>({nodeIds: [], offsetX: 0, offsetY: 0, guides: []});
+
+const getSnapAnchors = (bounds: {left: number, top: number, right: number, bottom: number}) => {
+    const centerX = (bounds.left + bounds.right) / 2;
+    const centerY = (bounds.top + bounds.bottom) / 2;
+    return [
+        {x: bounds.left, y: bounds.top},
+        {x: centerX, y: bounds.top},
+        {x: bounds.right, y: bounds.top},
+        {x: bounds.right, y: centerY},
+        {x: bounds.right, y: bounds.bottom},
+        {x: centerX, y: bounds.bottom},
+        {x: bounds.left, y: bounds.bottom},
+        {x: bounds.left, y: centerY},
+        {x: centerX, y: centerY}
+    ];
+};
+
+const findSnapPreview = (
+    movingNodes: Pick<Node, "x" | "y" | "width" | "height">[],
+    stationaryNodes: Node[],
+    deltaX: number,
+    deltaY: number,
+    threshold: number,
+    applyPreviewOffset: boolean
+) => {
+    if(movingNodes.length === 0 || stationaryNodes.length === 0){
+        return {offsetX: 0, offsetY: 0, guides: [] as SnapGuide[]};
+    }
+
+    const bounds = movingNodes.reduce((current, node) => ({
+        left: Math.min(current.left, node.x),
+        top: Math.min(current.top, node.y),
+        right: Math.max(current.right, node.x + node.width),
+        bottom: Math.max(current.bottom, node.y + node.height)
+    }), {left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity});
+    const movingAnchors = getSnapAnchors(bounds);
+    const stationaryAnchors = stationaryNodes.flatMap(node => getSnapAnchors({
+        left: node.x,
+        top: node.y,
+        right: node.x + node.width,
+        bottom: node.y + node.height
+    }));
+
+    let offsetX = 0;
+    let offsetY = 0;
+    let closestX = threshold;
+    let closestY = threshold;
+
+    if(applyPreviewOffset){
+        for(const moving of movingAnchors){
+            for(const stationary of stationaryAnchors){
+                const differenceX = stationary.x - (moving.x + deltaX);
+                if(Math.abs(differenceX) < closestX){
+                    closestX = Math.abs(differenceX);
+                    offsetX = differenceX;
+                }
+
+                const differenceY = stationary.y - (moving.y + deltaY);
+                if(Math.abs(differenceY) < closestY){
+                    closestY = Math.abs(differenceY);
+                    offsetY = differenceY;
+                }
+            }
+        }
+    }
+
+    const guides: SnapGuide[] = [];
+    for(const moving of movingAnchors){
+        for(const stationary of stationaryAnchors){
+            const displayedX = moving.x + deltaX + offsetX;
+            if(Math.abs(stationary.x - displayedX) < threshold){
+                guides.push({
+                    axis: "x",
+                    position: stationary.x,
+                    from: {x: displayedX, y: moving.y + deltaY + offsetY},
+                    to: stationary
+                });
+            }
+
+            const displayedY = moving.y + deltaY + offsetY;
+            if(Math.abs(stationary.y - displayedY) < threshold){
+                guides.push({
+                    axis: "y",
+                    position: stationary.y,
+                    from: {x: moving.x + deltaX + offsetX, y: displayedY},
+                    to: stationary
+                });
+            }
+        }
+    }
+
+    return {offsetX, offsetY, guides};
+};
 
 let viewportBounds = {x: 0, y: 0, width: 0, height: 0};
 let lastViewportUpdate = 0;
@@ -143,12 +252,93 @@ const anchorPoints = [
 
 export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => {
 
+    const [editingNode, setEditingNode] = createSignal<{id: string, value: string, initialHeight: number} | null>(null);
+    let titleEditorRef: HTMLTextAreaElement | undefined;
     let isConnecting = false;
     let isSelecting = false;
+    let isCreating = false;
     
     let connectionSourceId: string | null = null;
     let connectionPoint: {x: number, y: number, direction: ANCHOR_POINT} | null = null;
     let connectionSourcePoint: {x: number, y: number, direction: ANCHOR_POINT} | null = null;
+
+    const finishTitleEditing = (save: boolean) => {
+        const edit = editingNode();
+        if(!edit) return;
+
+        if(save){
+            const node = nodes.find(candidate => candidate.id === edit.id);
+            if(node){
+                actionUpdateNodeTitle(edit.id, node.title || "", edit.value, edit.initialHeight);
+            }
+        } else {
+            const node = nodes.find(candidate => candidate.id === edit.id);
+            if(node && node.height !== edit.initialHeight){
+                updateNodeSize(node.id, node.width, edit.initialHeight);
+                finalizeNodeSize(node.id);
+            }
+        }
+
+        setEditingNode(null);
+    };
+
+    const resizeTitleEditor = (editor: HTMLTextAreaElement) => {
+        const edit = editingNode();
+        const node = edit && nodes.find(candidate => candidate.id === edit.id);
+        if(!edit || !node) return;
+
+        const zoom = nodusCanvas.camera.zoom();
+        const basePadding = 10 * zoom;
+        editor.style.height = "auto";
+        editor.style.padding = `${basePadding}px`;
+        const contentHeight = editor.scrollHeight - basePadding * 2;
+        const naturalHeight = contentHeight / zoom + 20;
+        const height = Math.max(edit.initialHeight, naturalHeight);
+        updateNodeSize(node.id, node.width, height);
+        const verticalPadding = (height * zoom - contentHeight) / 2;
+        editor.style.height = `${height * zoom}px`;
+        editor.style.padding = `${verticalPadding}px ${basePadding}px`;
+    };
+
+    const handleNodeDoubleClick = (e: MouseEvent) => {
+        if(mouseOption() === 'move' || isPressedEspace()) return;
+
+        const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
+        const hit = [...nodes].reverse().find(node =>
+            x >= node.x && x <= node.x + node.width &&
+            y >= node.y && y <= node.y + node.height
+        );
+
+        if(!hit || hit.lock || ocupadoPor(hit.id) !== undefined) return;
+
+        setSelectedNodesIds([hit.id]);
+        setEditingNode({id: hit.id, value: hit.title || "", initialHeight: hit.height});
+        requestAnimationFrame(() => {
+            if(!titleEditorRef) return;
+            titleEditorRef.focus();
+            titleEditorRef.select();
+            resizeTitleEditor(titleEditorRef);
+        });
+    };
+
+    const handleTitleEditorKeyDown = (e: KeyboardEvent & { currentTarget: HTMLTextAreaElement }) => {
+        e.stopPropagation();
+        if(e.key === 'Enter' && !e.shiftKey){
+            e.preventDefault();
+            finishTitleEditing(true);
+            e.currentTarget.blur();
+        } else if(e.key === 'Escape'){
+            e.preventDefault();
+            finishTitleEditing(false);
+        }
+    };
+
+    const editingNodeDetails = () => {
+        const edit = editingNode();
+        if(!edit) return null;
+        const node = nodes.find(candidate => candidate.id === edit.id);
+        return node ? {edit, node} : null;
+    };
 
     const handleMouseDown = (e: MouseEvent) => {
 
@@ -165,6 +355,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
         const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
 
+        if(mouseOption() === 'create'){
+            isCreating = true;
+            selectionRect = {x0: x, y0: y, x1: x, y1: y};
+            setSelectedNodesIds([]);
+            setDraggedNodeId(null);
+            return;
+        }
+
         // Primero verificamos si es un resize
         const resizingPointsize = 8 / nodusCanvas.camera.zoom();
         const resizingPoint = resizingDots().find(dot => 
@@ -178,12 +376,22 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             // Guardar snapshot para el historial
             resizingNodesCopy = [...nodes].filter(node => selectedNodesIds().includes(node.id)).map(node => ({...node}));
             nodesMoveSnapshot = captureNodesSnapshot(selectedNodesIds());
-            const bounds = calculateDiagramBounds(selectedNodes());
+            const bounds = resizingNodesCopy.reduce((current, node) => ({
+                minX: Math.min(current.minX, node.x),
+                minY: Math.min(current.minY, node.y),
+                maxX: Math.max(current.maxX, node.x + node.width),
+                maxY: Math.max(current.maxY, node.y + node.height)
+            }), {
+                minX: Infinity,
+                minY: Infinity,
+                maxX: -Infinity,
+                maxY: -Infinity
+            });
             setResizingBox({
-                x: bounds.x + 20,
-                y: bounds.y + 20,
-                width: bounds.width - 20,
-                height: bounds.height - 20
+                x: bounds.minX,
+                y: bounds.minY,
+                width: bounds.maxX - bounds.minX,
+                height: bounds.maxY - bounds.minY
             });
             return;
         }
@@ -244,6 +452,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     }
                 }
                 setDraggedNodeId(hit.id);
+                nodesMoveSnapshot = captureNodesSnapshot(selectedNodesIds());
             }
         } else {
             isSelecting = true;
@@ -268,6 +477,24 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         //Primero verificamos si es resizing
         if(isResizing()){
             manageResizing(mousePos)
+            const movingIds = new Set(selectedNodesIds());
+            const movingNodes = selectedNodes();
+            const stationaryNodes = nodes.filter(node => !movingIds.has(node.id));
+            const preview = findSnapPreview(
+                movingNodes,
+                stationaryNodes,
+                0,
+                0,
+                8 / nodusCanvas.camera.zoom(),
+                false
+            );
+            setSnapPreview({nodeIds: [], ...preview});
+            return;
+        }
+
+        if(isCreating){
+            selectionRect.x1 = mousePos.x;
+            selectionRect.y1 = mousePos.y;
             return;
         }
 
@@ -322,9 +549,27 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             return;
         }
 
-        //Arrastre multiple
         const deltaX = e.movementX / nodusCanvas.camera.zoom();
         const deltaY = e.movementY / nodusCanvas.camera.zoom();
+        const draggedId = draggedNodeId()!;
+        const movingNodes = selectedNodesIds().includes(draggedId)
+            ? selectedNodes().filter(node => !node.lock)
+            : nodes.filter(node => node.id === draggedId && !node.lock);
+        const movingIds = new Set(movingNodes.map(node => node.id));
+        const stationaryNodes = nodes.filter(node => !movingIds.has(node.id));
+        const preview = findSnapPreview(
+            movingNodes,
+            stationaryNodes,
+            deltaX,
+            deltaY,
+            8 / nodusCanvas.camera.zoom(),
+            true
+        );
+
+        setSnapPreview({
+            nodeIds: movingNodes.map(node => node.id),
+            ...preview
+        });
 
         if(selectedNodesIds().includes(draggedNodeId()!)){
             selectedNodes().forEach(node => {
@@ -367,6 +612,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 finalizeNodePosition(id);
                 finalizeNodeSize(id);
             });
+
             setIsResizing(false);
             setFocusedPoint(null);
             setReferencePoint(null);
@@ -391,6 +637,26 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             }).map(it => it.id));
 
             isSelecting = false;
+            return;
+        }
+
+        if(isCreating){
+            const end = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
+            const width = Math.abs(end.x - selectionRect.x0);
+            const height = Math.abs(end.y - selectionRect.y0);
+            const dragDistance = Math.hypot(
+                (end.x - selectionRect.x0) * nodusCanvas.camera.zoom(),
+                (end.y - selectionRect.y0) * nodusCanvas.camera.zoom()
+            );
+
+            if(dragDistance >= 4){
+                const x = Math.min(selectionRect.x0, end.x);
+                const y = Math.min(selectionRect.y0, end.y);
+                actionCreateNode(x, y, undefined, Math.max(60, width), Math.max(40, height));
+            }
+
+            isCreating = false;
+            selectionRect = {x0: 0, y0: 0, x1: 0, y1: 0};
             return;
         }
 
@@ -451,18 +717,18 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
         // Finalizar movimiento de nodos - registrar en historial
         if(draggedNodeId() && draggedNodeId() !== "root") {
-            
-            // Registrar el movimiento en el historial si hay snapshot guardado
+            const movedNodeIds = nodesMoveSnapshot.length > 0
+                ? nodesMoveSnapshot.map(snapshot => snapshot.id)
+                : selectedNodesIds();
+            movedNodeIds.forEach(nodeID => finalizeNodePosition(nodeID));
+
             if (nodesMoveSnapshot.length > 0) {
-                actionFinalizeMultipleNodesMove(nodesMoveSnapshot as any);
+                actionFinalizeMultipleNodesMove(nodesMoveSnapshot);
             }
-            
-            selectedNodesIds().forEach(nodeID => {
-                finalizeNodePosition(nodeID);
-            });
         }
 
         setDraggedNodeId(null);
+        setSnapPreview({nodeIds: [], offsetX: 0, offsetY: 0, guides: []});
         nodesMoveSnapshot = [];
     };
 
@@ -483,6 +749,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
     setViewMouseHandlers({
         onLeftClick: handleMouseDown,
+        onDoubleClick: handleNodeDoubleClick,
         onMove: handleMouseMove,
         onUp: handleMouseUp,
         onRightClick: handleRightClickMouseDown
@@ -524,7 +791,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 }
                 
                 // Cache de nodos visibles para evitar filtrados repetitivos
-                const visibleNodes = [...nodes].filter(node => isNodeVisible(node));
+                const preview = snapPreview();
+                const previewNodeIds = new Set(preview.nodeIds);
+                const displayNodes = [...nodes].map(node => previewNodeIds.has(node.id)
+                    ? {...node, x: node.x + preview.offsetX, y: node.y + preview.offsetY}
+                    : node
+                );
+                const displayNodesById = new Map(displayNodes.map(node => [node.id, node]));
+                const visibleNodes = displayNodes.filter(node => isNodeVisible(node));
                 const lockedNodes = visibleNodes.filter(node => node.lock);
                 const unlockedNodes = visibleNodes.filter(node => !node.lock);
                 
@@ -557,6 +831,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                         }
                     }
                 }
+
+                // Grid solo para nodo seleccionado único y visible
+                if(selectedNodesIds().length === 1){
+                    const node = displayNodesById.get(selectedNodesIds()[0]);
+                    if(node && isNodeVisible(node) && userData.currentProjectProperties.showNodeLines){
+                        drawNodeGrid(CK, node);
+                    }
+                }
                 
                 // Dibujar nodos bloqueados (visibles)
                 lockedNodes.forEach(node => {
@@ -566,8 +848,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 
                 // Dibujar conexiones solo entre nodos visibles
                 connections.forEach(conn => {
-                    const fromNode = nodes.find(n => n.id === conn.from);
-                    const toNode = nodes.find(n => n.id === conn.to);
+                    const fromNode = displayNodesById.get(conn.from);
+                    const toNode = displayNodesById.get(conn.to);
                     
                     if (fromNode && !fromNode.lock && toNode && !toNode.lock && 
                         (isNodeVisible(fromNode) || isNodeVisible(toNode))) {
@@ -576,7 +858,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 });
 
                 if(isConnecting && connectionSourceId){
-                    const fromNode = nodes.find(n => n.id === connectionSourceId);
+                    const fromNode = displayNodesById.get(connectionSourceId);
                     if(fromNode){
                         const startPoint = connectionSourcePoint || {
                             x: fromNode.x + fromNode.width / 2,
@@ -592,13 +874,9 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     drawNode(CK, node);
                     drawNodeText(CK, node, nodusCanvas.getFont());
                 });
-                
-                // Grid solo para nodo seleccionado único y visible
-                if(selectedNodesIds().length === 1){
-                    const node = selectedNodes()[0];
-                    if(node && isNodeVisible(node) && userData.currentProjectProperties.showNodeLines){
-                        drawNodeGrid(CK, node);
-                    }
+
+                if(isResizing() || (draggedNodeId() && draggedNodeId() !== "root")){
+                    drawSnapGuides(CK, preview.guides);
                 }
 
                 if(connectionPoint){
@@ -614,10 +892,10 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 
                 setResizingDots([]);
                 if(selectedNodesIds().length > 0){
-                    drawResizingBox(CK, selectedNodes())
+                    drawResizingBox(CK, selectedNodes().map(node => displayNodesById.get(node.id) || node))
                 }
                 
-                if(isSelecting){
+                if(isSelecting || isCreating){
                     drawSelectionRect();
                 }
                 
@@ -772,6 +1050,10 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             cursor = draggedNodeId() !== null? 'grabbing' : 'grab';
         }
 
+        else if(mouse === 'create'){
+            cursor = 'crosshair';
+        }
+
         else if(focusedPoint() !== null){
 
             switch(focusedPoint()?.direction){
@@ -828,6 +1110,39 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden", "pointer-events": "none" }}>
 
             { EDITOR_HEADER(handleShare) }
+
+            <Show when={editingNodeDetails()}>
+                {details => {
+                    const screenPosition = () => nodusCanvas.camera.wordlToScreen(details().node.x, details().node.y);
+                    return (
+                        <textarea
+                            ref={element => {
+                                titleEditorRef = element;
+                                element.value = editingNode()?.value || "";
+                                requestAnimationFrame(() => resizeTitleEditor(element));
+                            }}
+                            class={styles.nodeTitleEditor}
+                            style={{
+                                left: `${screenPosition().x}px`,
+                                top: `${screenPosition().y}px`,
+                                width: `${details().node.width * nodusCanvas.camera.zoom()}px`,
+                                "font-size": `${(details().node.properties.fontSize || 15) * nodusCanvas.camera.zoom()}px`,
+                                "background-color": details().node.color,
+                                color: obtenerColorTexto(details().node.color)
+                            }}
+                            onInput={e => {
+                                const edit = editingNode();
+                                if(edit){
+                                    setEditingNode({...edit, value: e.currentTarget.value});
+                                    resizeTitleEditor(e.currentTarget);
+                                }
+                            }}
+                            onKeyDown={handleTitleEditorKeyDown}
+                            onBlur={() => finishTitleEditing(true)}
+                        />
+                    );
+                }}
+            </Show>
 
             <Show when={isCommandPaletteOpen()}>
                 {COMMAND_PALETTE()}

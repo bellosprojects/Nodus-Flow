@@ -113,33 +113,34 @@ export const createCameraStore = () => {
         return screen.x >= 0 && screen.y <= window.innerWidth && screen.y >= 0 && screen.y <= window.innerHeight;
     }
 
-    const animateTo = (targetOffsetX: number, targetOffsetY: number, targetZoom: number, duration: number = 420) => {
+    const animateTo = (targetOffsetX: number, targetOffsetY: number, targetZoom: number, duration: number = 420): Promise<void> => {
         const startX = offsetX();
         const startY = offsetY(); 
         const startZoom = zoom();
         const startTime = Date.now();
         
-        const animate = () => {
-            const now = Date.now();
-            const elapse = now - startTime;
-            
-            const t = Math.min(1, elapse / duration);
+        return new Promise(resolve => {
+            const animate = () => {
+                const now = Date.now();
+                const elapse = now - startTime;
+                const t = Math.min(1, elapse / duration);
 
-            const ease = t;
+                setOffsetX(startX + (targetOffsetX - startX) * t);
+                setOffsetY(startY + (targetOffsetY - startY) * t);
+                setZoom(startZoom + (targetZoom - startZoom) * t);
 
-            setOffsetX(startX + (targetOffsetX - startX) * ease);
-            setOffsetY(startY + (targetOffsetY - startY) * ease);
-            setZoom(startZoom + (targetZoom - startZoom) * ease);
+                if(t < 1){
+                    requestAnimationFrame(animate);
+                } else {
+                    setOffsetX(targetOffsetX);
+                    setOffsetY(targetOffsetY);
+                    setZoom(targetZoom);
+                    resolve();
+                }
+            };
 
-            if ( t < 1) requestAnimationFrame(animate);
-            else {
-                setOffsetX(targetOffsetX);
-                setOffsetY(targetOffsetY);
-                setZoom(targetZoom);
-            }
-        };
-
-        requestAnimationFrame(animate);
+            requestAnimationFrame(animate);
+        });
     }
 
     const centerCameraNow = () => {
