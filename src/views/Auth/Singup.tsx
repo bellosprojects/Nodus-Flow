@@ -9,7 +9,7 @@ export const Signup = (props: {
     const [email, setEmail] = createSignal("");
     const [password, setPassword] = createSignal("");
     const [confirmPassword, setConfirmPassword] = createSignal("");
-    const [displayName, setDisplayName] = createSignal("");
+    const [nickname, setNickname] = createSignal("");
     const [loading, setLoading] = createSignal(false);
     const [error, setError] = createSignal<string | null>(null);
     const [success, setSuccess] = createSignal(false);
@@ -25,8 +25,8 @@ export const Signup = (props: {
             setError("Passwords do not match");
             return false;
         }
-        if (displayName().trim().length < 2) {
-            setError("Display name must be at least 2 characters");
+        if (!/^[A-Za-z0-9_]{3,24}$/.test(nickname().trim())) {
+            setError("Nickname must be 3-24 characters using letters, numbers, or underscores");
             return false;
         }
         return true;
@@ -39,7 +39,7 @@ export const Signup = (props: {
         if (!validate()) return;
         
         setLoading(true);
-        const result = await signup(email(), password(), displayName().trim());
+        const result = await signup(email(), password(), nickname().trim());
         setLoading(false);
         
         if (result.success) {
@@ -82,13 +82,13 @@ export const Signup = (props: {
                 <Show when={!success()}>
                     <form onSubmit={handleSubmit}>
                         <div class={styles.inputGroup}>
-                            <label>Display Name</label>
+                            <label>Unique nickname</label>
                             <input 
                                 class={styles.authInput} 
                                 type="text"
-                                placeholder="Your name" 
-                                value={displayName()} 
-                                onInput={e => setDisplayName(e.currentTarget.value)} 
+                                placeholder="e.g. nodus_user"
+                                value={nickname()}
+                                onInput={e => setNickname(e.currentTarget.value)}
                                 required 
                                 disabled={loading()}
                             />

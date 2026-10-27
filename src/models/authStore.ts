@@ -2,12 +2,13 @@ import { createStore } from "solid-js/store";
 import { showToast, ToastType } from "./toast";
 import { wsService } from "../core/socket";
 
-const API_URL = "https://render-yqtz.onrender.com";
+export const API_URL = "https://render-yqtz.onrender.com";
 
 interface AuthState {
     user: {
         id: string | null;
         email: string | null;
+        nickname: string | null;
         display_name: string | null;
     } | null;
     token: string | null;
@@ -77,10 +78,11 @@ export const login = async (email: string, password: string) => {
         setAuthStore("user", {
             id: data.id,
             email,
-            display_name: data.display_name
+            nickname: data.nickname || data.display_name,
+            display_name: data.display_name || data.nickname
         });
         setAuthStore("isAuthenticated", true);
-        setAuthStore("loading", true);
+        setAuthStore("loading", false);
         setAuthStore("error", null);
 
         showToast(`Welcome ${data.display_name}!`, ToastType.SUCCES);
@@ -94,7 +96,7 @@ export const login = async (email: string, password: string) => {
     }
 };
 
-export const signup = async (email: string, password: string, display_name: string) => {
+export const signup = async (email: string, password: string, nickname: string) => {
     
     setAuthStore("loading", true);
     setAuthStore("error", null);
@@ -103,7 +105,7 @@ export const signup = async (email: string, password: string, display_name: stri
         const res = await fetch(`${API_URL}/auth/signup`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password, display_name })
+            body: JSON.stringify({ email: email, password: password, nickname: nickname }) 
         });
 
         const data = await res.json();

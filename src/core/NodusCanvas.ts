@@ -22,6 +22,7 @@ class NodusCanvas {
     private viewportResizeTimeout: number | null = null;
     private viewportCenterWorld: {x: number, y: number} | null = null;
     public isResizing = createSignal(false);
+    public viewName : "lobby" | "editor" = "lobby";
 
     async init(canvasElement: HTMLCanvasElement){
         console.log("[NodusCanvas] Init started");
@@ -131,7 +132,7 @@ class NodusCanvas {
                 if(center){
                     const zoom = this.camera.zoom();
                     const target = this.camera.offsetToCenterPoint(center.x, center.y, zoom);
-                    this.camera.animateTo(target.offsetX, target.offsetY, zoom);
+                    if(this.viewName == 'editor') this.camera.animateTo(target.offsetX, target.offsetY, zoom);
                 }
 
                 this.viewportCenterWorld = null;

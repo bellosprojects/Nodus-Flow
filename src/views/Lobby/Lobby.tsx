@@ -4,13 +4,24 @@ import { drawGrid } from "../../core/renderer";
 import { DEVICE_INFO, HEADER } from "../Lobby/components/Toolbars";
 import { COPYRIGHT, CREATE_FLOW, RECENT_USED, USERNAME } from "./components/Toolbars";
 import style from "./Lobby.module.css";
-import { generateRandomRoomId } from "../../utils/network";
-import { updateRoomId, userData } from "../../models/userStore";
+import { updateCurrentRoomRole, updateRoomId, userData } from "../../models/userStore";
 import { setViewMouseHandlers } from "../../utils/mouse";
 import { useLicense } from "../../services/license";
-import { onCleanup, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useUser } from "../../models/users";
+import { showToast, ToastType } from "../../models/toast";
+import {
+    createRoom,
+    joinRoom,
+    listPublicRooms,
+    listUserRooms,
+    archiveRoom,
+    deleteRoom,
+    requestRoomAccess,
+    RoomSummary,
+    RoomVisibility
+} from "../../services/rooms";
 
 let mousePos = {
     x: 0,
@@ -264,6 +275,13 @@ const drawInfiniteFloor = (canvas: Canvas, ck: CanvasKit) => {
 export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => {
 
     const nodus = nodusCanvas;
+    const [userRooms, setUserRooms] = createSignal<RoomSummary[]>([]);
+    const [publicRooms, setPublicRooms] = createSignal<RoomSummary[]>([]);
+    const [roomsLoading, setRoomsLoading] = createSignal(true);
+    const [createDialogOpen, setCreateDialogOpen] = createSignal(false);
+    const [roomName, setRoomName] = createSignal("New Project");
+    const [roomVisibility, setRoomVisibility] = createSignal<RoomVisibility>("shared");
+    const [roomActionError, setRoomActionError] = createSignal("");
 
     const {deviceId, daysLeft, expiryDate} = useLicense();
 
@@ -273,11 +291,30 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
 
     const appWindow = getCurrentWindow();
 
+    const refreshRooms = async () => {
+        setRoomsLoading(true);
+        try {
+            const [mine, publicList] = await Promise.all([
+                listUserRooms(),
+                listPublicRooms()
+            ]);
+            setUserRooms(mine);
+            setPublicRooms(publicList);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "Could not load rooms.", ToastType.ERROR);
+        } finally {
+            setRoomsLoading(false);
+        }
+    };
+
     onMount(() => {
+
+        nodus.viewName = 'lobby';
 
         appWindow.setTitle(`Nodus Flow - ${useUser().name()}`);
 
         rebuildGridPaths(window.innerWidth, window.innerHeight, nodusCanvas.getCK());
+        void refreshRooms();
 
     });
 
@@ -308,21 +345,79 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
     })
 
     const startFlow = () => {
-        const newDiagramId = generateRandomRoomId();
-        updateRoomId(newDiagramId);
-        props.onNavigate('editor');
+        setRoomName("New Project");
+        setRoomVisibility("shared");
+        setRoomActionError("");
+        setCreateDialogOpen(true);
     };
 
-    const joinFlow = () => {
-        const newDiagramId = (document.getElementById(style.roomIdInput) as HTMLInputElement).value;
-        updateRoomId(newDiagramId);
-        props.onNavigate('editor');
+    const openRoom = async (roomId: string) => {
+        const normalizedId = roomId.trim();
+        if (!normalizedId) return;
+        try {
+            const room = await joinRoom(normalizedId);
+            updateRoomId(normalizedId);
+            updateCurrentRoomRole(room.role || null);
+            props.onNavigate('editor');
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Could not join this room.";
+            if (
+                message.includes("owner has not added you to this private room")
+                && confirm("This is a private room. Send an access request to its owner?")
+            ) {
+                try {
+                    await requestRoomAccess(normalizedId);
+                    showToast("Access request sent to the room owner.", ToastType.INFO);
+                } catch (requestError) {
+                    showToast(
+                        requestError instanceof Error ? requestError.message : "Could not send the access request.",
+                        ToastType.ERROR
+                    );
+                }
+                return;
+            }
+            showToast(message, ToastType.ERROR);
+        }
+    };
+
+    const changeRoomArchive = async (room: RoomSummary, archived: boolean) => {
+        const action = archived ? "Archive" : "Restore";
+        if (archived && !confirm(`Archive "${room.name}"? Members will no longer be able to open it.`)) return;
+        try {
+            await archiveRoom(room.id, archived);
+            await refreshRooms();
+            showToast(`Room ${archived ? "archived" : "restored"}.`, ToastType.SUCCES);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : `Could not ${action.toLowerCase()} the room.`, ToastType.ERROR);
+        }
+    };
+
+    const permanentlyDeleteRoom = async (room: RoomSummary) => {
+        if (!confirm(`Permanently delete "${room.name}" and all its diagram data? This cannot be undone.`)) return;
+        try {
+            await deleteRoom(room.id);
+            await refreshRooms();
+            showToast("Room permanently deleted.", ToastType.SUCCES);
+        } catch (error) {
+            showToast(error instanceof Error ? error.message : "Could not delete the room.", ToastType.ERROR);
+        }
+    };
+
+    const createNewRoom = async (event: Event) => {
+        event.preventDefault();
+        setRoomActionError("");
+        try {
+            const room = await createRoom(roomName().trim(), roomVisibility());
+            updateRoomId(room.id);
+            props.onNavigate('editor');
+        } catch (error) {
+            setRoomActionError(error instanceof Error ? error.message : "Could not create the room.");
+        }
     };
 
     const recentUsed = () => {
         const newDiagramId = userData.lastRoom;
-        updateRoomId(newDiagramId);
-        props.onNavigate('editor');
+        void openRoom(newDiagramId);
     };
 
     setViewMouseHandlers({
@@ -350,8 +445,103 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
 
             {/* Main: formulario centrado */}
             <main class={style.main}>
-            {CREATE_FLOW(startFlow, joinFlow)}
+            <div class={style.dashboard}>
+                {CREATE_FLOW(startFlow, () => {
+                    const input = document.getElementById(style.roomIdInput) as HTMLInputElement | null;
+                    if (input) void openRoom(input.value);
+                })}
+                <div class={style.roomSections}>
+                    <section class={style.roomSection}>
+                        <h2>Your rooms</h2>
+                        <Show when={!roomsLoading()} fallback={<p class={style.roomEmpty}>Loading rooms...</p>}>
+                            <Show when={userRooms().length > 0} fallback={<p class={style.roomEmpty}>Rooms you own or joined will appear here.</p>}>
+                                <For each={userRooms()}>
+                                    {(room) => (
+                                        <article class={style.roomCard}>
+                                            <div>
+                                                <strong>{room.name}</strong>
+                                                <span class={style.roomMeta}>ID: {room.id} · {room.visibility}</span>
+                                                <span class={style.roomMeta}>Modified: {room.updated_at ? new Date(room.updated_at).toLocaleString() : "Unknown"}</span>
+                                                <Show when={room.archived_at}>
+                                                    <span class={style.roomMeta}>Archived</span>
+                                                </Show>
+                                            </div>
+                                            <div class={style.roomCardActions}>
+                                                <Show when={!room.archived_at} fallback={
+                                                    <Show when={room.owner_id === useUser().id()}>
+                                                        <button onClick={() => void changeRoomArchive(room, false)}>Restore</button>
+                                                    </Show>
+                                                }>
+                                                    <button onClick={() => void openRoom(room.id)}>Open</button>
+                                                    <Show when={room.owner_id === useUser().id()}>
+                                                        <button class={style.secondaryRoomAction} onClick={() => void changeRoomArchive(room, true)}>Archive</button>
+                                                    </Show>
+                                                </Show>
+                                                <Show when={room.owner_id === useUser().id()}>
+                                                    <button class={style.dangerRoomAction} onClick={() => void permanentlyDeleteRoom(room)}>Delete</button>
+                                                </Show>
+                                            </div>
+                                        </article>
+                                    )}
+                                </For>
+                            </Show>
+                        </Show>
+                    </section>
+                    <section class={style.roomSection}>
+                        <h2>Public rooms</h2>
+                        <Show when={!roomsLoading()} fallback={<p class={style.roomEmpty}>Loading public rooms...</p>}>
+                            <Show when={publicRooms().length > 0} fallback={<p class={style.roomEmpty}>No public rooms yet.</p>}>
+                                <For each={publicRooms()}>
+                                    {(room) => (
+                                        <article class={style.roomCard}>
+                                            <div>
+                                                <strong>{room.name}</strong>
+                                                <span class={style.roomMeta}>ID: {room.id} · Owner: {room.owner_nickname || "Unknown"}</span>
+                                                <span class={style.roomMeta}>Modified: {room.updated_at ? new Date(room.updated_at).toLocaleString() : "Unknown"}</span>
+                                            </div>
+                                            <button onClick={() => void openRoom(room.id)}>Join</button>
+                                        </article>
+                                    )}
+                                </For>
+                            </Show>
+                        </Show>
+                    </section>
+                </div>
+            </div>
             </main>
+
+            <Show when={createDialogOpen()}>
+                <div class={style.dialogBackdrop} onClick={() => setCreateDialogOpen(false)}>
+                    <form class={style.createDialog} onSubmit={createNewRoom} onClick={(event) => event.stopPropagation()}>
+                        <h2>Create a room</h2>
+                        <label for="new-room-name">Room name</label>
+                        <input
+                            id="new-room-name"
+                            value={roomName()}
+                            onInput={(event) => setRoomName(event.currentTarget.value)}
+                            maxlength={80}
+                            required
+                        />
+                        <label for="new-room-visibility">Visibility</label>
+                        <select
+                            id="new-room-visibility"
+                            value={roomVisibility()}
+                            onChange={(event) => setRoomVisibility(event.currentTarget.value as RoomVisibility)}
+                        >
+                            <option value="private">Private · owner whitelist</option>
+                            <option value="shared">Shared · join by ID</option>
+                            <option value="public">Public · listed in the lobby</option>
+                        </select>
+                        <Show when={roomActionError()}>
+                            <p class={style.roomError}>{roomActionError()}</p>
+                        </Show>
+                        <div class={style.dialogActions}>
+                            <button type="button" onClick={() => setCreateDialogOpen(false)}>Cancel</button>
+                            <button type="submit">Create room</button>
+                        </div>
+                    </form>
+                </div>
+            </Show>
 
             {/* Footer */}
             <footer class={style.footer}>

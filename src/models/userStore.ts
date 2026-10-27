@@ -13,12 +13,20 @@ const [userData, setUserData] = createStore({
     lastRoom: lastUsedRoom,
     currentProjectName: '',
     oldProjectName: '',
-    currentProjectProperties: {} as Record<string, any>
+    currentProjectProperties: {} as Record<string, any>,
+    currentRoomOwnerId: null as string | null,
+    currentRoomOwnerNickname: null as string | null,
+    currentRoomVisibility: "shared" as "private" | "shared" | "public",
+    currentRoomRole: null as "owner" | "editor" | "viewer" | null
 });
 
 
 export const updateRoomId = (newRoomId: string) => {
     setUserData("roomId", newRoomId);
+    setUserData("currentRoomOwnerId", null);
+    setUserData("currentRoomOwnerNickname", null);
+    setUserData("currentRoomVisibility", "shared");
+    setUserData("currentRoomRole", null);
     localStorage.setItem("nodus_room_id", newRoomId);
     updateLastRoomUsed(newRoomId);
 }
@@ -36,6 +44,20 @@ export const updateCurrentProjectName = (newProjectName: string, send = true) =>
         'tipo': 'cambiar_nombre_proyecto',
         'nombre': newProjectName
     });
+};
+
+export const updateRoomDetails = (details: {
+    owner_id: string | null;
+    owner_nickname: string | null;
+    visibility: "private" | "shared" | "public";
+}) => {
+    setUserData("currentRoomOwnerId", details.owner_id);
+    setUserData("currentRoomOwnerNickname", details.owner_nickname);
+    setUserData("currentRoomVisibility", details.visibility);
+};
+
+export const updateCurrentRoomRole = (role: "owner" | "editor" | "viewer" | null) => {
+    setUserData("currentRoomRole", role);
 };
 
 export const addCurrentProjectProperty = (propertyName: string, propertyValue: any, send = true) => {

@@ -9,7 +9,8 @@ export interface User {
     targetX?: number,
     targetY?: number,
     color: string,
-    object?: string
+    object?: string,
+    role?: "owner" | "editor" | "viewer"
 };
 
 export const [activeUsers, setActiveUsers] = createStore<User[]>([]);
@@ -22,7 +23,7 @@ export const updateCursor = (name: string, targetX: number, targetY : number) =>
 }
 
 export const useUser = () => {
-    const displayName = () => authStore.user?.display_name || "Anonymous"
+    const displayName = () => authStore.user?.nickname || authStore.user?.display_name || "Anonymous"
     const userId = () => authStore.user?.id || null
     const isAuthenticated = () => authStore.isAuthenticated
 

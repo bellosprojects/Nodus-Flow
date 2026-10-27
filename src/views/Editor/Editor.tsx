@@ -252,6 +252,7 @@ const anchorPoints = [
 
 export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => {
 
+    const isViewer = () => userData.currentRoomRole !== "owner" && userData.currentRoomRole !== "editor";
     const [editingNode, setEditingNode] = createSignal<{id: string, value: string, initialHeight: number} | null>(null);
     let titleEditorRef: HTMLTextAreaElement | undefined;
     let isConnecting = false;
@@ -265,6 +266,10 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     const finishTitleEditing = (save: boolean) => {
         const edit = editingNode();
         if(!edit) return;
+        if (isViewer()) {
+            setEditingNode(null);
+            return;
+        }
 
         if(save){
             const node = nodes.find(candidate => candidate.id === edit.id);
@@ -301,6 +306,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     };
 
     const handleNodeDoubleClick = (e: MouseEvent) => {
+        if (isViewer()) return;
         if(mouseOption() === 'move' || isPressedEspace()) return;
 
         const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY);
@@ -341,6 +347,10 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     };
 
     const handleMouseDown = (e: MouseEvent) => {
+        if (isViewer()) {
+            if (mouseOption() === "move" || isPressedEspace()) setDraggedNodeId("root");
+            return;
+        }
 
         if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur();
@@ -473,6 +483,13 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
             nombre: useUser().name()
         }, false);
 
+        if (isViewer()) {
+            if (draggedNodeId() === "root" && !isRunningDataFlow()) {
+                nodusCanvas.camera.setOffsetX(prev => prev + e.movementX);
+                nodusCanvas.camera.setOffsetY(prev => prev + e.movementY);
+            }
+            return;
+        }
 
         //Primero verificamos si es resizing
         if(isResizing()){
@@ -585,6 +602,12 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     };
 
     const handleMouseUp = (e : MouseEvent) => {
+        if (isViewer()) {
+            setDraggedNodeId(null);
+            isSelecting = false;
+            isCreating = false;
+            return;
+        }
 
         // Finalizar resize - registrar en historial
         if(isResizing()){
@@ -733,6 +756,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     };
 
     const handleRightClickMouseDown = (e : MouseEvent) => {
+        if (isViewer()) return;
 
         const {x, y} = nodusCanvas.camera.screenToWordl(e.offsetX, e.offsetY)
 
@@ -756,6 +780,8 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
     });
 
     onMount(async () => {
+
+        nodusCanvas.viewName = 'editor';
         
         wsService.initSocket();
 
@@ -939,6 +965,14 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         
         initializeEditorKeyboardEvents();
 
+        const handleViewerEscape = (event: KeyboardEvent) => {
+            if (event.key !== "Escape" || !isViewer()) return;
+
+            event.preventDefault();
+            onHome();
+        };
+        window.addEventListener("keydown", handleViewerEscape);
+
         const handlerGlobalMouseMove = (_: MouseEvent) => {
             if(mouseDisabled()) setMouseDisables(false);
         }
@@ -968,6 +1002,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         onCleanup(() => {
             
             removeEditorKeyboardEvents();
+            window.removeEventListener("keydown", handleViewerEscape);
 
             document.removeEventListener('mousemove', handlerGlobalMouseMove);
 
@@ -1111,7 +1146,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
             { EDITOR_HEADER(handleShare) }
 
-            <Show when={editingNodeDetails()}>
+            <Show when={!isViewer() && editingNodeDetails()}>
                 {details => {
                     const screenPosition = () => nodusCanvas.camera.wordlToScreen(details().node.x, details().node.y);
                     return (
@@ -1144,29 +1179,39 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 }}
             </Show>
 
-            <Show when={isCommandPaletteOpen()}>
+            <Show when={!isViewer() && isCommandPaletteOpen()}>
                 {COMMAND_PALETTE()}
             </Show>
 
-            <Show when={!isCommandPaletteOpen()}>
+            <Show when={!isViewer() && !isCommandPaletteOpen()}>
                 { LEFT_TOOLBAR(onFullScrren, onHome) }
             </Show>
 
 
-            { Properties() }
+            <Show when={!isViewer()}>
+                { Properties() }
+            </Show>
 
 
-            { TOOL_BELT() }
+            <Show when={!isViewer()}>
+                { TOOL_BELT() }
+            </Show>
 
-            { LAYERS_PANEL() }
+            <Show when={!isViewer()}>
+                { LAYERS_PANEL() }
+            </Show>
 
-            { LAST_ACTIONS() }
+            <Show when={!isViewer()}>
+                { LAST_ACTIONS() }
+            </Show>
 
             { CURRENT_POSITION() }
 
             { ConfigPanel() }
 
-            { <AutosavePanel onClose={() => setIsAutosavePAnelopen(false)}></AutosavePanel> }
+            <Show when={!isViewer()}>
+                <AutosavePanel onClose={() => setIsAutosavePAnelopen(false)} />
+            </Show>
 
             <Show when={isRunningDataFlow() && dataFlowResult()}>
                 <div style={{

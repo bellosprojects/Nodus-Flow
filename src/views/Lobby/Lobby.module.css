@@ -133,8 +133,168 @@
   flex: 1;
   display: flex;
   justify-content: center;
+  align-items: flex-start;
+  min-height: 0;
+  overflow-y: auto;
+  pointer-events: auto;
+  padding: 18px 24px;
+  box-sizing: border-box;
+}
+
+.dashboard {
+  width: min(1120px, 100%);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  pointer-events: none;
+  gap: 28px;
+  pointer-events: auto;
+}
+
+.roomSections {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.roomSection {
+  min-width: 0;
+  max-height: 310px;
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid rgba(0, 200, 200, 0.1);
+  border-radius: 16px;
+  background: rgba(10, 16, 28, 0.68);
+  backdrop-filter: blur(12px);
+}
+
+.roomSection h2 {
+  margin: 0 0 14px;
+  font: 500 14px 'Orbitron', sans-serif;
+  letter-spacing: 1px;
+  color: #b0d0d0;
+}
+
+.roomCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.roomCard > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.roomCard .roomCardActions {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roomCard strong {
+  overflow: hidden;
+  color: #e0f0f0;
+  text-overflow: ellipsis;
+}
+
+.roomMeta,
+.roomEmpty {
+  color: #819999;
+  font: 11px 'JetBrains Mono', monospace;
+  overflow-wrap: anywhere;
+}
+
+.roomEmpty {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+}
+
+.roomCard button,
+.dialogActions button {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border: 1px solid rgba(0, 200, 200, 0.3);
+  border-radius: 8px;
+  color: #00c8c8;
+  background: rgba(0, 200, 200, 0.06);
+  cursor: pointer;
+}
+
+.roomCard .secondaryRoomAction {
+  color: #e4c785;
+  border-color: rgba(228, 199, 133, 0.3);
+  background: rgba(228, 199, 133, 0.06);
+}
+
+.roomCard .dangerRoomAction {
+  color: #ff9a9a;
+  border-color: rgba(255, 110, 110, 0.3);
+  background: rgba(255, 80, 80, 0.06);
+}
+
+.dialogBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.68);
+  pointer-events: auto;
+}
+
+.createDialog {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid rgba(0, 200, 200, 0.2);
+  border-radius: 18px;
+  background: #10191d;
+  color: #dceaea;
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.5);
+}
+
+.createDialog h2 {
+  margin: 0 0 8px;
+  font: 500 17px 'Orbitron', sans-serif;
+}
+
+.createDialog label {
+  color: #8eaaaa;
+  font-size: 12px;
+}
+
+.createDialog input,
+.createDialog select {
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 8px;
+  color: #e0f0f0;
+  background: #0b1114;
+}
+
+.roomError {
+  margin: 0;
+  color: #ff9a9a;
+  font-size: 12px;
+}
+
+.dialogActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .createFlow {
@@ -302,6 +462,18 @@
   .createFlow {
     padding: 28px 20px;
     width: 100%;
+  }
+  .main {
+    padding: 16px 0;
+  }
+  .dashboard {
+    gap: 18px;
+  }
+  .roomSections {
+    grid-template-columns: 1fr;
+  }
+  .roomSection {
+    max-height: 240px;
   }
   .userName {
     font-size: 13px;

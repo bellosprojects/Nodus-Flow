@@ -399,6 +399,163 @@
     font-size: 13px;
 }
 
+.roomOwner {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 13px;
+}
+
+.roomOwner strong {
+    color: #b7eeee;
+}
+
+.roomOwner code {
+    color: #64b4fa;
+}
+
+.accessLabel {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+.accessSelect,
+.memberInput {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 9px;
+    padding: 10px 12px;
+    color: white;
+}
+
+.accessSelect:disabled {
+    opacity: 0.7;
+}
+
+.accessSelect option {
+    color: #111;
+}
+
+.addMemberForm {
+    display: flex;
+    gap: 8px;
+}
+
+.roomActionButton,
+.removeMemberButton {
+    border: 1px solid rgba(0, 200, 200, 0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #76dddd;
+    background: rgba(0, 200, 200, 0.08);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.roomMembers {
+    display: flex;
+    flex-direction: column;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.roomMember {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 4px;
+    color: rgba(255, 255, 255, 0.8);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.roomMemberName {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.roomMemberName small,
+.roomOwnerBadge {
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.memberRoleSelect {
+    min-width: 90px;
+    padding: 6px;
+    color: white;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 7px;
+}
+
+.memberRoleSelect option {
+    color: #111;
+}
+
+.memberActions {
+    display: flex;
+    gap: 6px;
+}
+
+.roomActionButton:disabled,
+.removeMemberButton:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.removeMemberButton {
+    color: #ff9a9a;
+    border-color: rgba(255, 110, 110, 0.3);
+    background: rgba(255, 80, 80, 0.08);
+}
+
+.activityList {
+    display: flex;
+    flex-direction: column;
+    max-height: 240px;
+    overflow-y: auto;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.activityItem {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 10px;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.activityItem time {
+    flex: 0 0 auto;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+}
+
+.activityItem small {
+    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.42);
+    overflow-wrap: anywhere;
+}
+
+.activityEmpty {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 12px;
+}
+
+.roomSettingsError {
+    margin: 0;
+    color: #ff9a9a;
+    font-size: 12px;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .panel {

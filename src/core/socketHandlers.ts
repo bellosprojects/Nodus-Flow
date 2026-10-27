@@ -2,8 +2,8 @@ import { addConnectionProperty, changeConnectionStyle, createRemoteConnection, d
 import { addNodeProperty, addRemoteNode, changeNodeStyle, deleteNode, deleteNodeProperty, lockNode, moveToBack, moveToFront, unLockNode, updateNodeColor, updateNodeOpacity, updateNodeRadius, updateNodeRemote, updateNodeSize, updateNodoTitle } from "../models/nodes";
 import { addPing } from "../models/ping";
 import { removeToast, showToast, ToastType } from "../models/toast";
-import { setActiveUsers, updateCursor, User } from "../models/users";
-import { addCurrentProjectProperty, deleteCurrentProjectProperty, setUserData, updateCurrentProjectName } from "../models/userStore";
+import { setActiveUsers, updateCursor, User, useUser } from "../models/users";
+import { addCurrentProjectProperty, deleteCurrentProjectProperty, setUserData, updateCurrentProjectName, updateCurrentRoomRole, updateRoomDetails } from "../models/userStore";
 import { setIsAppLoading } from "../views/components/Transition";
 import { nodusCanvas } from "./NodusCanvas";
 import { initToastId, resetToast } from "./socket";
@@ -24,6 +24,12 @@ export const eventHandlers: Record<string, SokectHandler> = {
         }
         setUserData("currentProjectProperties", data.propiedades);
         updateCurrentProjectName(data.nombre, false);
+        updateRoomDetails({
+            owner_id: data.owner_id,
+            owner_nickname: data.owner_nickname,
+            visibility: data.visibility || "shared"
+        });
+        updateCurrentRoomRole(data.role || null);
         nodusCanvas.camera.centerCameraNow();
         if(initToastId){
             removeToast(initToastId);
@@ -57,9 +63,23 @@ export const eventHandlers: Record<string, SokectHandler> = {
                 object: user.objeto,
                 user_id: user.user_id
             }
+            newUser.role = user.role;
             newUsersList.push(newUser);
         }
         setActiveUsers(newUsersList);
+        const currentUser = newUsersList.find(user => user.user_id === useUser().id());
+        if (currentUser?.role) updateCurrentRoomRole(currentUser.role);
+    },
+    'room_details': (data) => {
+        updateRoomDetails({
+            owner_id: data.owner_id,
+            owner_nickname: data.owner_nickname,
+            visibility: data.visibility
+        });
+        updateCurrentProjectName(data.name, false);
+    },
+    'error': (data) => {
+        showToast(data.mensaje || "The server rejected that action.", ToastType.ERROR);
     },
     'crear_conexion': (data) => {
         const conn = data.conexion;

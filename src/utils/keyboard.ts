@@ -3,6 +3,7 @@ import { nodes, selectedNodesIds, selectedNodes } from "../models/nodes";
 import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setIsPRessedEspace, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
 import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette/CommandPalette";
 import { activeUsers, useUser } from "../models/users";
+import { userData } from "../models/userStore";
 import { addPing } from "../models/ping";
 import { performRedo, performUndo } from "../core/history";
 import {
@@ -34,9 +35,11 @@ const isTyping = (e: KeyboardEvent) => {
     return isTyping;
 }
 
+const isViewer = () => userData.currentRoomRole !== "owner" && userData.currentRoomRole !== "editor";
+
 function deleteSelectedNodesEvent(e: KeyboardEvent){
 
-    if(isTyping(e)) return;
+    if(isTyping(e) || isViewer()) return;
 
     if(e.key === 'Delete' || e.key === 'Backspace'){
         actionDeleteSelectedNodes();
@@ -44,7 +47,7 @@ function deleteSelectedNodesEvent(e: KeyboardEvent){
 }
 
 function clipboardShortcuts(e: KeyboardEvent){
-    if(isTyping(e) || !(e.ctrlKey || e.metaKey)) return;
+    if(isTyping(e) || isViewer() || !(e.ctrlKey || e.metaKey)) return;
 
     switch(e.key.toLowerCase()){
         case 'c':
@@ -67,6 +70,10 @@ function clipboardShortcuts(e: KeyboardEvent){
 }
 
 function openCommandPaletteEvent(e: KeyboardEvent){
+    if (isViewer()) {
+        if (e.key === "Escape") setIsCommandPaletteOpen(false);
+        return;
+    }
     if((e.ctrlKey || e.metaKey) && e.key === 'k'){
         e.preventDefault();
         setIsCommandPaletteOpen(prev => !prev);
@@ -138,7 +145,7 @@ function navigateCommandPaletteEvent(e: KeyboardEvent){
 
 function mousesOptionEvents(e: KeyboardEvent){
 
-    if(isTyping(e)) return;
+    if(isTyping(e) || isViewer()) return;
 
     if(e.key === 'h'){
         e.preventDefault();
@@ -157,6 +164,7 @@ function mousesOptionEvents(e: KeyboardEvent){
 
 function nodeSelectionsEvent(e: KeyboardEvent){
 
+    if (isViewer()) return;
     if(e.ctrlKey || e.metaKey){
 
         e.preventDefault();
@@ -180,7 +188,7 @@ function nodeSelectionsEvent(e: KeyboardEvent){
 }
 
 function extraShortCuts(e: KeyboardEvent){
-    if(e.ctrlKey || e.metaKey){
+    if(!isViewer() && (e.ctrlKey || e.metaKey)){
         e.preventDefault();
         if(e.key === 'l'){
             setIsLayersPanelOpen(prev => !prev);
@@ -191,7 +199,7 @@ function extraShortCuts(e: KeyboardEvent){
 }
 
 function historyListeners(e : KeyboardEvent){
-    if(e.ctrlKey || e.metaKey){
+    if(!isViewer() && (e.ctrlKey || e.metaKey)){
         if(e.key === 'z'){
             e.preventDefault();
             performUndo();

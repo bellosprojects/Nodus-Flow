@@ -5,3 +5,5 @@
 *.json
 *.ts
 !src/core/actions.ts
+!src/services/rooms.ts
+NodusWorkspace.code-workspace

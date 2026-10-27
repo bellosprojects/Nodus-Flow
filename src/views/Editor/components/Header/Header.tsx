@@ -1,6 +1,6 @@
 import styles from "./Header.module.css";
 import { For } from "solid-js";
-import { activeUsers } from "../../../../models/users";
+import { activeUsers, useUser } from "../../../../models/users";
 import shareIco from "../../../../assets/share.svg";
 import downloadIco from "../../../../assets/download.svg";
 import { exportDiagramAsPng } from "../../../../core/renderer";
@@ -38,10 +38,20 @@ const TOP_BUTTONS = (onShare: () => void) => {
 }
 
 const PROJECT_NAME = () => {
+    const isOwner = () => userData.currentRoomOwnerId === useUser().id();
+    let projectNameSnapshot = userData.currentProjectName;
     return (
         <div class={styles.projectName}>
             <p>Project Name: </p>
-            <input placeholder='Enter project name...' type="text" value={userData.currentProjectName} onInput={(e) => updateCurrentProjectName(e.currentTarget.value)} onBlur={(_) => actionUpdateProjectName(userData.oldProjectName, userData.currentProjectName)}/>
+            <input
+                placeholder="Enter project name..."
+                type="text"
+                value={userData.currentProjectName}
+                readonly={!isOwner()}
+                onFocus={() => { projectNameSnapshot = userData.currentProjectName; }}
+                onInput={(event) => updateCurrentProjectName(event.currentTarget.value, false)}
+                onBlur={() => actionUpdateProjectName(projectNameSnapshot, userData.currentProjectName)}
+            />
         </div>
     )
 }
