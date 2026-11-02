@@ -1,0 +1,143 @@
+.launcher {
+    position: fixed;
+    z-index: 300;
+    left: 14px;
+    bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #ccc;
+    font: 12px Inter, sans-serif;
+    cursor: pointer;
+    pointer-events: auto;
+    backdrop-filter: blur(12px);
+}
+
+.launcher span:first-child {
+    color: white;
+    text-shadow: 0px 0px 3px rgb(112, 200, 200);
+    font-family: Consolas, monospace;
+    font-weight: 700;
+}
+
+.panel {
+    position: fixed;
+    z-index: 300;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 180px;
+    border-top: 1px solid rgba(129, 158, 177, 0.35);
+    background: rgba(12, 17, 24, 0.97);
+    color: #e7eef5;
+    font-family: Inter, sans-serif;
+    pointer-events: auto;
+    box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.28);
+}
+
+.resizeHandle {
+    position: absolute;
+    top: -4px;
+    left: 0;
+    z-index: 1;
+    width: 100%;
+    height: 8px;
+    cursor: ns-resize;
+    touch-action: none;
+}
+
+.resizeHandle:hover {
+    background: rgba(100, 216, 203, 0.22);
+}
+
+.header {
+    display: flex;
+    flex: 0 0 36px;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    border-bottom: 1px solid rgba(129, 158, 177, 0.18);
+    font-size: 12px;
+}
+
+.header strong {
+    color: #72b3ab;
+}
+
+.header span {
+    flex: 1;
+    color: #91a0ad;
+}
+
+.header button {
+    border: 0;
+    background: transparent;
+    color: #b7c3cd;
+    padding: 4px 6px;
+    font: 11px Inter, sans-serif;
+    cursor: pointer;
+}
+
+.header button:last-child {
+    font-size: 22px;
+}
+
+.output {
+    flex: 1;
+    overflow: auto;
+    padding: 8px 14px;
+    font: 12px/1.55 Consolas, "Courier New", monospace;
+}
+
+.output pre {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.command {
+    padding-top: 6px !important;
+    color: #71d6cb;
+}
+
+.success {
+    color: #d3dde5;
+}
+
+.error {
+    color: #ff8e8e;
+}
+
+.inputRow {
+    display: flex;
+    flex: 0 0 42px;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-top: 1px solid rgba(129, 158, 177, 0.18);
+    font: 13px Consolas, "Courier New", monospace;
+}
+
+.inputRow label {
+    color: #64d8cb;
+}
+
+.inputRow input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: #f1f5f8;
+    font: inherit;
+}
+
+.inputRow input::placeholder {
+    color: #72808b;
+}

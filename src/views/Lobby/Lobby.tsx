@@ -1,11 +1,9 @@
 import { Canvas, CanvasKit, Paint, Path, Shader } from "canvaskit-wasm";
 import { nodusCanvas } from "../../core/NodusCanvas"
-import { drawGrid } from "../../core/renderer";
 import { DEVICE_INFO, HEADER } from "../Lobby/components/Toolbars";
-import { COPYRIGHT, CREATE_FLOW, RECENT_USED, USERNAME } from "./components/Toolbars";
+import { CREATE_FLOW, RECENT_USED, USERNAME } from "./components/Toolbars";
 import style from "./Lobby.module.css";
 import { updateCurrentRoomRole, updateRoomId, userData } from "../../models/userStore";
-import { setViewMouseHandlers } from "../../utils/mouse";
 import { useLicense } from "../../services/license";
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -23,17 +21,12 @@ import {
     RoomVisibility
 } from "../../services/rooms";
 
-let mousePos = {
-    x: 0,
-    y: 0
-};
-
 const RECT_SIZE = 40;
+const NUM_RECTANGLES = 12;
 
 let gridScroll = 0;
 let rectangles : {col:number, row: number, color: number[], alpha: number, count: number, decay: number}[] = [];
 
-// Objetos reutilizables (se recrean solo al cambiar el tamaño)
 let verticalPath: Path | null = null;
 let horizontalPath: Path | null = null;
 let gridPaint: Paint | null = null;
@@ -122,11 +115,10 @@ function rebuildGridPaths(w: number, h: number, ck: CanvasKit) {
 }
 
 export function initRectangles(w: number, h: number) {
-    const count = 7;
     const maxCell = Math.floor(Math.min(w, h) / (2 * RECT_SIZE)) - 1; // para que no se salgan
 
     rectangles = [];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < NUM_RECTANGLES; i++) {
         // Elegir col y row aleatorios, excluyendo el 0
         let col, row;
         do {
@@ -251,7 +243,7 @@ const drawInfiniteFloor = (canvas: Canvas, ck: CanvasKit) => {
                 rect.row = Math.floor(Math.random() * (2 * maxCell + 1)) - maxCell;
             } while (rect.row === 0);
             rect.count = 0;
-            rect.color = [0, 200, 200];
+            rect.color = [Math.random() * 20, 170 + Math.random() * 60, 160 + Math.random() * 80];
             rect.decay = 0.003 + Math.random() * 0.007;
         }
 
@@ -307,9 +299,12 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
         }
     };
 
+    const handleProjectsChanged = () => void refreshRooms();
+
     onMount(() => {
 
         nodus.viewName = 'lobby';
+        window.addEventListener("nodus:projects-changed", handleProjectsChanged);
 
         appWindow.setTitle(`Nodus Flow - ${useUser().name()}`);
 
@@ -320,6 +315,7 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
 
     onCleanup(() => {
 
+        window.removeEventListener("nodus:projects-changed", handleProjectsChanged);
         verticalPath?.delete();
         horizontalPath?.delete();
         gridPaint?.delete();
@@ -337,7 +333,6 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
 
     nodus.setDraw(() => {
         drawInfiniteFloor(nodusCanvas.getCanvas(), nodusCanvas.getCK());
-        drawGrid(mousePos);
     });
 
     nodus.setOnResize(() => {
@@ -419,13 +414,6 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
         const newDiagramId = userData.lastRoom;
         void openRoom(newDiagramId);
     };
-
-    setViewMouseHandlers({
-        onMove: (e) => {
-            const pos = {x: e.offsetX, y: e.offsetY};
-            mousePos = nodusCanvas.camera.screenToWordl(pos.x, pos.y);
-        }
-    })
 
     nodusCanvas.camera.setOffsetX(0);
     nodusCanvas.camera.setOffsetY(0);
@@ -543,9 +531,8 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
                 </div>
             </Show>
 
-            {/* Footer */}
             <footer class={style.footer}>
-            {COPYRIGHT()}
+            <span></span>
             <Show when={daysLeft() !== null && expiryDate() !== null}>
                 <DEVICE_INFO
                 deviceId={deviceId()!!}

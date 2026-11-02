@@ -41,6 +41,7 @@ import {
 import { nodusCanvas } from '../../../core/NodusCanvas';
 
 import {
+    activeNode,
     selectedNodes, 
     selectedNodesIds, 
     toolBeltPosition 
@@ -125,6 +126,11 @@ export const TOOL_BELT = () => {
             <div class={styles.toolBelt}
                 style={{left: `${toolBeltPosition()?.x}px`,
                 top: `${toolBeltPosition()?.y}px`}}>
+                <Show when={activeNode()?.properties.code !== undefined}>
+                    <div class={styles.toolBeltButton} data-tooltip="Play Code">
+                        <img src={playIco} alt="" onClick={() => {}}/>
+                    </div>
+                </Show>
                 <div class={styles.toolBeltButton} data-tooltip="Fit height">
                     <img src={textIco} alt="" onClick={handleBulkFitHeight}/>
                 </div>

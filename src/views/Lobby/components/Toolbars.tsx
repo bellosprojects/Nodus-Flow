@@ -9,9 +9,12 @@ import { useUser } from "../../../models/users";
 // HEADER: solo el logo + título (sin contenedor extra)
 export const HEADER = () => {
   return (
-    <div class={style.brand}>
-      <img src={myLogo} alt="Nodus" />
-      <h1>Nodus Flow</h1>
+    <div>
+      <div class={style.brand}>
+        <img src={myLogo} alt="Nodus" />
+        <h1>Nodus Flow</h1>
+      </div>
+      { COPYRIGHT() }
     </div>
   );
 };

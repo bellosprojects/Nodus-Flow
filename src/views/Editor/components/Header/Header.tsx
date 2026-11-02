@@ -7,7 +7,6 @@ import { exportDiagramAsPng } from "../../../../core/renderer";
 import { userData } from "../../../../models/userStore";
 import { updateCurrentProjectName } from "../../../../models/userStore";
 import { actionUpdateProjectName } from "../../../../core/actions";
-import { HEADER } from "../../../Lobby/components/Toolbars";
 
 const USERS_PANEL = () => {
 
@@ -60,7 +59,6 @@ export const EDITOR_HEADER = (handleShare: () => void) => {
     return (
         <div class={styles.header}>
             <span>
-                { HEADER() }
                 { PROJECT_NAME() }
             </span>
 

@@ -13,8 +13,18 @@ import { Login } from "./views/Auth/Login";
 import { Signup } from "./views/Auth/Singup";
 import { authStore } from "./models/authStore";
 import { LOADER } from "./views/components/Transition";
+import { CommandConsole } from "./components/CommandConsole";
 
 const startView : 'lobby' | 'editor' = 'lobby';
+
+const handleContextMenu = (event: MouseEvent) => {
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, [contenteditable='true']"))) {
+        return;
+    }
+
+    event.preventDefault();
+};
 
 function NodusFlowApp(props: {started: boolean}) {
 
@@ -41,6 +51,13 @@ function NodusFlowApp(props: {started: boolean}) {
 
     const handleNavigate = (view: 'editor' | 'lobby') => {
         setCurrentView(view);
+    };
+
+    const prepareForProjectNavigation = async () => {
+        if (currentView() === 'editor') {
+            setCurrentView('lobby');
+            await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+        }
     };
 
     return (
@@ -72,6 +89,10 @@ function NodusFlowApp(props: {started: boolean}) {
                 </Match>
             </Switch>
 
+            <CommandConsole
+                onNavigate={handleNavigate}
+                prepareForProjectNavigation={prepareForProjectNavigation}
+            />
         </div>
     );
 }
@@ -106,10 +127,12 @@ function App() {
 
     onMount(() => {
         initializeGlobalKeyboardEvents();
+        document.addEventListener("contextmenu", handleContextMenu, true);
     });
 
     onCleanup(() => {
         removeGlobalKeyboardEvents();
+        document.removeEventListener("contextmenu", handleContextMenu, true);
     });
 
     const handleDeepLinks = (urls: string[]) => {

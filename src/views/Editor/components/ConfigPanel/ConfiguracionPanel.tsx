@@ -452,6 +452,7 @@ export const ConfigPanel = () => {
                                             <div class={styles.activityItem}>
                                                 <span>
                                                     <strong>{activity.actor_nickname}</strong> {activity.action.replace(/_/g, " ")}
+                                                    <br/>
                                                     <Show when={formatActivityDetails(activity.details)}>
                                                         <small>{formatActivityDetails(activity.details)}</small>
                                                     </Show>

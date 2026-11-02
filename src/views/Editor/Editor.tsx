@@ -1,14 +1,68 @@
-import { Properties } from "./components/Properties";
+// Estilos
 import styles from "./Editor.module.css";
-import { CURRENT_POSITION, LAST_ACTIONS, LEFT_TOOLBAR, TOOL_BELT } from "./components/Toolbars";
-import { nodes, updateNodePosition, updateNodeSize, finalizeNodePosition, setNodes, ocupadoPor, selectedNodesIds, activeNode, selectedNodes, setSelectedNodesIds, Node, finalizeNodeSize } from "../../models/nodes";
+import "../../App.css";
+
+// Objetos REACT (VISUALES)
+import { 
+    CURRENT_POSITION, 
+    LAST_ACTIONS, 
+    LEFT_TOOLBAR, 
+    TOOL_BELT 
+} from "./components/Toolbars";
+
+import { Properties } from "./components/Properties";
+import { ConfigPanel } from "./components/ConfigPanel/ConfiguracionPanel";
+import { AutosavePanel } from "./components/AutosavePanel/AutosavePanel";
+import { EDITOR_HEADER } from "./components/Header/Header";
+import { LAYERS_PANEL } from "./components/LayersPanel/LayersPanel";
+import { ToastContainer } from "../components/ToastContainer";
+
+// MODELOS (NODOS)
+import { 
+    nodes, 
+    updateNodePosition, 
+    updateNodeSize, 
+    finalizeNodePosition, 
+    setNodes, 
+    ocupadoPor, 
+    selectedNodesIds, 
+    activeNode, 
+    selectedNodes, 
+    setSelectedNodesIds, 
+    Node, 
+    finalizeNodeSize, 
+    setDraggedNodeId, 
+    draggedNodeId, 
+    draggedNode
+} from "../../models/nodes";
+
+// MODELOS (CONEXIONES)
+import { 
+    connections, 
+    setConnections, 
+    setSelectedConnectionId 
+} from "../../models/connections";
+
+// Manejadores de interaccion (MOUSE + KEYBOARD) 
+import { 
+    setViewMouseHandlers 
+} from "../../utils/mouse";
+
+import { 
+    initializeEditorKeyboardEvents, 
+    removeEditorKeyboardEvents 
+} from "../../utils/keyboard";
+
+// UTILIDADES DE CALCULO
 import { lerp } from "../../utils/math";
-import { setDraggedNodeId, draggedNodeId, draggedNode } from "../../models/nodes";
-import { connections, setConnections, setSelectedConnectionId } from "../../models/connections";
+import { manageResizing } from "../../utils/resizing";
+import { obtenerColorTexto } from "../../utils/color";
+
 import { moveNodeThrottle, wsService } from "../../core/socket";
 import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
 
+// RENDERIZACION
 import { 
     drawGrid, 
     drawConnection, 
@@ -31,19 +85,17 @@ import {
     invalidateParagraphCache
 } from "../../core/renderer";
 
-import "../../App.css";
-import { setViewMouseHandlers } from "../../utils/mouse";
+// MANEJO DE LA VENTANA
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { deleteCurrentProjectProperty, userData } from "../../models/userStore";
+// PALETA DE COMANDOS
 import { COMMAND_PALETTE, setActiveIndex } from "./components/CommandPalette/CommandPalette";
-import { activeUsers, setActiveUsers, useUser } from "../../models/users";
-import { ToastContainer } from "../components/ToastContainer";
-import { showToast } from "../../models/toast";
-import { initializeEditorKeyboardEvents, removeEditorKeyboardEvents } from "../../utils/keyboard";
-import { manageResizing } from "../../utils/resizing";
-import { obtenerColorTexto } from "../../utils/color";
 
+import { deleteCurrentProjectProperty, userData } from "../../models/userStore";
+import { activeUsers, setActiveUsers, useUser } from "../../models/users";
+import { showToast } from "../../models/toast";
+
+// MANEJO DE ACCIONES REGISTRADAS
 import { 
     captureNodesSnapshot, 
     actionFinalizeMultipleNodesMove, 
@@ -56,6 +108,7 @@ import {
     actionUpdateNodeTitle,
 } from "../../core/actions";
 
+// AUTOGUARDADO AUTOMATICO
 import { 
     startAutosaveTimer,
     stopAutosaveTimer,
@@ -63,10 +116,6 @@ import {
     cleanOldAutosaves
 } from "../../core/autosave";
 
-import { ConfigPanel } from "./components/ConfigPanel/ConfiguracionPanel";
-import { AutosavePanel } from "./components/AutosavePanel/AutosavePanel";
-import { EDITOR_HEADER } from "./components/Header/Header";
-import { LAYERS_PANEL } from "./components/LayersPanel/LayersPanel";
 import { commitTransaction, startTransaction } from "../../core/history";
 import { setIsAppLoading, setLoadingAppMessage } from "../components/Transition";
 
@@ -766,7 +815,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
         );
 
         if(hit){
-            actionChangeNodeStyle(hit.id, hit.style, (hit.style + 1) % 2);
+            actionChangeNodeStyle(hit.id, hit.style, (hit.style + 1) % 3 + 1);
         }
 
     };

@@ -336,10 +336,11 @@ const AdvancedPropertiesAdder = (props: {nodeId: string}) => {
     };
 
     const suggestedProps = [
-        "underline", 
+        "underline",
         "doubleBorder",
         "dashedBorder", 
         "borderWidth",
+        "code",
         "dashedUnderline",
         "disjointMembership",
         "overlappingMembership",

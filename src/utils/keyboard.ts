@@ -28,6 +28,12 @@ async function fullScreenEvent(e: KeyboardEvent){
     }
 };
 
+function preventBrowserReload(e: KeyboardEvent){
+    if(e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r')){
+        e.preventDefault();
+    }
+}
+
 const isTyping = (e: KeyboardEvent) => {
     const target = e.target as HTMLElement;
     const isTyping = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
@@ -262,9 +268,11 @@ export const removeEditorKeyboardEvents = () => {
 };
 
 export const initializeGlobalKeyboardEvents = () => {
+    window.addEventListener('keydown', preventBrowserReload, true);
     window.addEventListener('keydown', fullScreenEvent);
 };
 
 export const removeGlobalKeyboardEvents = () => {
+    window.removeEventListener('keydown', preventBrowserReload, true);
     window.removeEventListener('keydown', fullScreenEvent);
 };
