@@ -8,4 +8,5 @@
 /src/*
 !/src/lib.rs
 !/src/ai_bridge.rs
+!/src/mcp_stdio.rs
 !/src/main.rs

@@ -8,8 +8,10 @@ const API_URL = "https://render-yqtz.onrender.com";
 interface LicenseStatus {
     valid: boolean;
     message: string;
-    expires_at?: string;
-    days_left?: number;
+    expires_at?: string | null;
+    days_left?: number | null;
+    license_type?: 'finite' | 'unlimited';
+    plan?: 'trial' | 'monthly' | 'annual' | 'unlimited' | 'custom';
     is_new?: boolean;
 }
 
@@ -75,7 +77,9 @@ class LicenseService {
             timestamp: Date.now(),
             valid: data.valid,
             expires_at: data.expires_at,
-            days_left: data.days_left
+            days_left: data.days_left,
+            license_type: data.license_type,
+            plan: data.plan
         });
         await this.store?.save();
         
@@ -91,7 +95,9 @@ class LicenseService {
             valid: cached.valid,
             message: 'Modo offline - usando última validación',
             expires_at: cached.expires_at,
-            days_left: cached.days_left
+            days_left: cached.days_left,
+            license_type: cached.license_type,
+            plan: cached.plan
             };
         }
         
@@ -120,6 +126,7 @@ export function useLicense() {
     const [licenseMessage, setLicenseMessage] = createSignal('');
     const [expiryDate, setExpiryDate] = createSignal<Date | null>(null);
     const [daysLeft, setDaysLeft] = createSignal<number | null>(null);
+    const [licenseType, setLicenseType] = createSignal<'finite' | 'unlimited' | null>(null);
     const [isLoading, setIsLoading] = createSignal(true);
     const [deviceId, setDeviceId] = createSignal<string | null>(null);
     
@@ -127,6 +134,9 @@ export function useLicense() {
         setIsAppLoading(true);
         setLoadingAppMessage("Verificando licencia");
         setIsLoading(true);
+        setExpiryDate(null);
+        setDaysLeft(null);
+        setLicenseType(null);
         
         try {
         await licenseService.init();
@@ -137,16 +147,20 @@ export function useLicense() {
         
         setLicenseValid(status.valid);
         setLicenseMessage(status.message);
-        
-        if (status.expires_at) {
+
+        const type = status.license_type
+            ?? (status.expires_at !== undefined && status.expires_at !== null ? 'finite' : null);
+        setLicenseType(type);
+
+        if (status.expires_at != null) {
             const expiry = new Date(status.expires_at);
             setExpiryDate(expiry);
-            
-            if (status.days_left !== undefined) {
-            setDaysLeft(status.days_left);
+
+            if (status.days_left != null) {
+                setDaysLeft(status.days_left);
             } else {
-            const days = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-            setDaysLeft(days);
+                const days = Math.ceil((expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                setDaysLeft(days);
             }
         }
         
@@ -176,6 +190,7 @@ export function useLicense() {
         licenseMessage,
         expiryDate,
         daysLeft,
+        licenseType,
         isLoading,
         deviceId,
         checkLicense,

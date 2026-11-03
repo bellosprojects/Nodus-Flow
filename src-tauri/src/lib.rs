@@ -1,5 +1,6 @@
 use tauri_plugin_deep_link::DeepLinkExt;
 mod ai_bridge;
+mod mcp_stdio;
 
 use ai_bridge::{
     complete_ai_bridge_request, get_ai_bridge_status, list_ai_bridge_clients, pair_ai_bridge_client,
@@ -105,8 +106,15 @@ pub fn run() {
             list_ai_bridge_clients,
             pair_ai_bridge_client,
             revoke_ai_bridge_client,
+            ai_bridge::configure_ai_client,
+            ai_bridge::unconfigure_ai_client,
+            ai_bridge::list_ai_client_targets,
             complete_ai_bridge_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+pub fn run_mcp_stdio(client_id: &str) -> i32 {
+    mcp_stdio::run(client_id)
 }

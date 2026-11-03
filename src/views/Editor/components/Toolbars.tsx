@@ -154,7 +154,7 @@ export const TOOL_BELT = () => {
     );
 };
 
-export const LAST_ACTIONS = () => {
+const LAST_ACTIONS = () => {
 
     const undoLabel = undoStack().length > 0? undoStack()[undoStack().length - 1].label : null;
     const redoLabel = redoStack().length > 0? redoStack()[redoStack().length - 1].label : null;
@@ -173,13 +173,16 @@ export const LAST_ACTIONS = () => {
     );
 };
 
-export const CURRENT_POSITION = () => {
+export const CURRENT_POSITION = (showHistory: boolean) => {
 
     return (
-        <Show when={userData.currentProjectProperties.showCameraInfo}>
-            <div class={styles.position}>
+        <div class={styles.position}>
+            <Show when={userData.currentProjectProperties.showCameraInfo}>
                 {`(${exportedMousePos().x.toFixed(0)},${exportedMousePos().y.toFixed(0)}) x${nodusCanvas.camera.zoom().toFixed(2)}`}
-            </div>
-        </Show>
+            </Show>
+            <Show when={showHistory}>
+                { LAST_ACTIONS() }
+            </Show>
+        </div>
     );
 };

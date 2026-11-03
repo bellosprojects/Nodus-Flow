@@ -275,23 +275,22 @@ option {
 }
 
 .lastActions {
-    position: absolute;
-    bottom: 8px;
-    left: 10px;
     display: flex;
     flex-direction: column;
     gap: 5px;
-    color: #ccc;
-    font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-    font-size: 11px;
 }
 
 .position {
+    font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
     position: absolute;
+    gap: 25px;
     bottom: 8px;
     color: #ccc;
     font-family: monospace;
     font-size: 11px;
     left: 50%;
     transform: translateX(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: end;
 }

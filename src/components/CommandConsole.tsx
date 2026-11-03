@@ -43,6 +43,25 @@ type BridgeRequest = {
     params: unknown;
 };
 
+type AiClientTarget = "vscode" | "claude" | "cursor";
+
+type AiClientSetup = {
+    configPath: string;
+    backupPath: string | null;
+};
+
+type AiClientTargetInfo = {
+    id: AiClientTarget;
+    label: string;
+    detected: boolean;
+};
+
+const DEFAULT_AI_CLIENT_TARGETS: AiClientTargetInfo[] = [
+    { id: "vscode", label: "VS Code / Copilot", detected: false },
+    { id: "claude", label: "Claude Desktop", detected: false },
+    { id: "cursor", label: "Cursor", detected: false }
+];
+
 const HISTORY_LIMIT = 100;
 const loadPanelHeight = () => {
     const stored = Number(localStorage.getItem("nodus_console_height"));
@@ -111,9 +130,12 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
     const [showAiAccess, setShowAiAccess] = createSignal(false);
     const [bridgeStatus, setBridgeStatus] = createSignal<BridgeStatus | null>(null);
     const [bridgeClients, setBridgeClients] = createSignal<BridgeClient[]>([]);
-    const [bridgeClientName, setBridgeClientName] = createSignal("VS Code");
+    const [bridgeTargets, setBridgeTargets] = createSignal(DEFAULT_AI_CLIENT_TARGETS);
+    const [bridgeClientName, setBridgeClientName] = createSignal("AI client");
+    const [bridgeSetupTarget, setBridgeSetupTarget] = createSignal<AiClientTarget>("vscode");
     const [newBridgeToken, setNewBridgeToken] = createSignal("");
     const [bridgeError, setBridgeError] = createSignal("");
+    const [bridgeNotice, setBridgeNotice] = createSignal("");
     const [bridgeBusy, setBridgeBusy] = createSignal(false);
     let nextEntryId = 1;
     let inputRef: HTMLInputElement | undefined;
@@ -192,12 +214,14 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
             return;
         }
         try {
-            const [status, clients] = await Promise.all([
+            const [status, clients, targets] = await Promise.all([
                 invoke<BridgeStatus>("get_ai_bridge_status"),
-                invoke<BridgeClient[]>("list_ai_bridge_clients")
+                invoke<BridgeClient[]>("list_ai_bridge_clients"),
+                invoke<AiClientTargetInfo[]>("list_ai_client_targets")
             ]);
             setBridgeStatus(status);
             setBridgeClients(clients);
+            setBridgeTargets(targets);
             setBridgeError("");
         } catch (error) {
             setBridgeError(error instanceof Error ? error.message : String(error));
@@ -265,10 +289,68 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
         }
     };
 
+    const clientTargetLabel = (target: AiClientTarget) =>
+        bridgeTargets().find(item => item.id === target)?.label ?? ({
+            vscode: "VS Code / Copilot",
+            claude: "Claude Desktop",
+            cursor: "Cursor"
+        })[target];
+
+    const configureBridgeClient = async (client: BridgeClient) => {
+        const target = bridgeSetupTarget();
+        const targetInfo = bridgeTargets().find(item => item.id === target);
+        if (!window.confirm(
+            `Add Nodus to ${clientTargetLabel(target)} using its bundled stdio adapter? ` +
+            "This updates that app's user MCP configuration. Existing files are backed up first." +
+            (targetInfo && !targetInfo.detected
+                ? "\n\nNodus did not detect this app on the system. Continue and create its config anyway?"
+                : "")
+        )) return;
+        setBridgeBusy(true);
+        setBridgeError("");
+        setBridgeNotice("");
+        try {
+            const setup = await invoke<AiClientSetup>("configure_ai_client", {
+                clientId: client.id,
+                target
+            });
+            setBridgeNotice(
+                `Configured ${clientTargetLabel(target)} at ${setup.configPath}` +
+                (setup.backupPath ? ` · backup: ${setup.backupPath}` : "")
+            );
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBridgeBusy(false);
+        }
+    };
+
+    const unconfigureBridgeClient = async () => {
+        const target = bridgeSetupTarget();
+        if (!window.confirm(
+            `Remove only the Nodus server entry from ${clientTargetLabel(target)}? ` +
+            "A backup of the current configuration will be created first."
+        )) return;
+        setBridgeBusy(true);
+        setBridgeError("");
+        setBridgeNotice("");
+        try {
+            const setup = await invoke<AiClientSetup>("unconfigure_ai_client", { target });
+            setBridgeNotice(
+                `Removed Nodus from ${clientTargetLabel(target)} · backup: ${setup.backupPath}`
+            );
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBridgeBusy(false);
+        }
+    };
+
     const copyBridgeToken = async () => {
         try {
             await navigator.clipboard.writeText(newBridgeToken());
-            setBridgeError("Pairing token copied. Store it in the AI client's secret input, not in a tracked file.");
+            setBridgeError("");
+            setBridgeNotice("Pairing token copied. Use it only in a secure HTTP credential input.");
         } catch (error) {
             setBridgeError(error instanceof Error ? error.message : "Could not copy the pairing token.");
         }
@@ -549,6 +631,7 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
                             setShowAiAccess(false);
                             setNewBridgeToken("");
                             setBridgeError("");
+                            setBridgeNotice("");
                         }}>×</button>
                     </header>
                     <p>
@@ -559,13 +642,17 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
                         <p class={styles.bridgeError}>Use the native Tauri app to enable the bridge; Vite browser mode cannot host it.</p>
                     }>
                         <p class={styles.bridgeStatus}>
-                            Bridge: <strong>{bridgeStatus()?.enabled ? "enabled" : "disabled"}</strong>
+                            MCP bridge: <strong>{bridgeStatus()?.enabled ? "enabled" : "disabled"}</strong>
                         </p>
                         <Show when={bridgeStatus()?.enabled} fallback={
                             <button disabled={bridgeBusy()} onClick={() => void startBridge()}>
                                 Enable local bridge
                             </button>
                         }>
+                            <p>
+                                Streamable HTTP endpoint. For automatic setup, select an app below; Nodus
+                                uses its bundled stdio adapter and keeps the token in the system credential store.
+                            </p>
                             <code>{bridgeStatus()?.endpoint}</code>
                             <button disabled={bridgeBusy()} onClick={() => void stopBridge()}>
                                 Disable local bridge
@@ -593,9 +680,33 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
                                 <strong>Copy this token now. It cannot be shown again.</strong>
                                 <code>{newBridgeToken()}</code>
                                 <button onClick={() => void copyBridgeToken()}>Copy token</button>
-                                <small>Never store this token in a repository or send it in an AI prompt.</small>
+                                <small>
+                                    The bundled stdio adapter stores it securely. For direct HTTP setup, use it
+                                    only in a secret input; never save it in a repository or AI prompt.
+                                </small>
                             </div>
                         </Show>
+                        <label class={styles.clientTarget}>
+                            Configure app
+                            <select
+                                value={bridgeSetupTarget()}
+                                onChange={event => {
+                                    const target = event.currentTarget.value;
+                                    if (target === "vscode" || target === "claude" || target === "cursor") {
+                                        setBridgeSetupTarget(target);
+                                    }
+                                }}
+                                disabled={bridgeBusy()}
+                            >
+                                <For each={bridgeTargets()}>
+                                    {target => (
+                                        <option value={target.id}>
+                                            {target.label} · {target.detected ? "detected" : "not detected"}
+                                        </option>
+                                    )}
+                                </For>
+                            </select>
+                        </label>
                         <Show when={bridgeClients().length > 0}>
                             <div class={styles.pairedClients}>
                                 <strong>Paired clients</strong>
@@ -603,6 +714,12 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
                                     {client => (
                                         <div>
                                             <span>{client.name}</span>
+                                            <button
+                                                disabled={bridgeBusy()}
+                                                onClick={() => void configureBridgeClient(client)}
+                                            >
+                                                Configure
+                                            </button>
                                             <button
                                                 disabled={bridgeBusy()}
                                                 onClick={() => void revokeBridgeClient(client)}
@@ -613,6 +730,15 @@ export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
                                     )}
                                 </For>
                             </div>
+                        </Show>
+                        <button
+                            disabled={bridgeBusy()}
+                            onClick={() => void unconfigureBridgeClient()}
+                        >
+                            Remove from selected app
+                        </button>
+                        <Show when={bridgeNotice()}>
+                            <p class={styles.bridgeNotice}>{bridgeNotice()}</p>
                         </Show>
                         <Show when={bridgeError()}>
                             <p class={styles.bridgeError}>{bridgeError()}</p>

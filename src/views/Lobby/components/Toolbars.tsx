@@ -75,12 +75,25 @@ export const COPYRIGHT = () => {
 };
 
 // DEVICE_INFO: opcional
-export const DEVICE_INFO = (props: { deviceId: string; daysLeft: number; expiryDate: Date }) => {
+export const DEVICE_INFO = (props: {
+  deviceId: string;
+  daysLeft: number | null;
+  expiryDate: Date | null;
+  licenseType: 'finite' | 'unlimited' | null;
+}) => {
   return (
     <div class={style.deviceInfo}>
       <p>Device: {props.deviceId}</p>
-      <p>Days: {props.daysLeft}</p>
-      <p>Expires: {props.expiryDate.toLocaleDateString('es-ES')}</p>
+      {props.licenseType === 'unlimited' ? (
+        <p>License: Unlimited</p>
+      ) : props.expiryDate ? (
+        <>
+          <p>Days: {props.daysLeft ?? '—'}</p>
+          <p>Expires: {props.expiryDate.toLocaleDateString('es-ES')}</p>
+        </>
+      ) : (
+        <p>License: unavailable</p>
+      )}
     </div>
   );
 };

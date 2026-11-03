@@ -5,7 +5,6 @@ import "../../App.css";
 // Objetos REACT (VISUALES)
 import { 
     CURRENT_POSITION, 
-    LAST_ACTIONS, 
     LEFT_TOOLBAR, 
     TOOL_BELT 
 } from "./components/Toolbars";
@@ -1250,11 +1249,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 { LAYERS_PANEL() }
             </Show>
 
-            <Show when={!isViewer()}>
-                { LAST_ACTIONS() }
-            </Show>
-
-            { CURRENT_POSITION() }
+            { CURRENT_POSITION(!isViewer()) }
 
             { ConfigPanel() }
 

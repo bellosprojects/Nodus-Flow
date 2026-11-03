@@ -24,6 +24,7 @@ export type OmniItem = {
 }
 
 enum CommandID {
+    ReloadWindow = "RELOAD_WINDOW",
     ExportPng = "EXPORT_PNG",
     ExportSvg = "EXPORT_SVG",
     ExportJson = "EXPORT_JSON",
@@ -53,6 +54,13 @@ enum CommandID {
 }
 
 const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) => void, color?: string, argPlaceholder?: string}> = {
+    [CommandID.ReloadWindow]: {
+        label: 'Reload Window',
+        action: (_) => {
+            location.reload();
+        },
+        color: "#c8e73e"
+    },
     [CommandID.ExportPng]: {
         label: 'Export PNG: Default Scale',
         action: (arg?: string) => exportDiagramAsPng(arg),

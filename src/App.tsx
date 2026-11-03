@@ -28,7 +28,7 @@ const handleContextMenu = (event: MouseEvent) => {
         return;
     }
 
-    //event.preventDefault();
+    event.preventDefault();
 };
 
 function NodusFlowApp(props: {

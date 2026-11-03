@@ -26,4 +26,5 @@ NodusWorkspace.code-workspace
 /src-tauri/src/*
 !/src-tauri/src/lib.rs
 !/src-tauri/src/ai_bridge.rs
+!/src-tauri/src/mcp_stdio.rs
 !/src-tauri/src/main.rs

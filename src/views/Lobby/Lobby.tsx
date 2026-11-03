@@ -275,7 +275,7 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
     const [roomVisibility, setRoomVisibility] = createSignal<RoomVisibility>("shared");
     const [roomActionError, setRoomActionError] = createSignal("");
 
-    const {deviceId, daysLeft, expiryDate} = useLicense();
+    const {deviceId, daysLeft, expiryDate, licenseType} = useLicense();
 
     const rebuildBgOnResize = () => {
         rebuildGridPaths(window.innerWidth, window.innerHeight, nodusCanvas.getCK());
@@ -533,11 +533,12 @@ export const Lobby = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) => 
 
             <footer class={style.footer}>
             <span></span>
-            <Show when={daysLeft() !== null && expiryDate() !== null}>
+            <Show when={deviceId()}>
                 <DEVICE_INFO
-                deviceId={deviceId()!!}
-                daysLeft={daysLeft()!!}
-                expiryDate={expiryDate()!!}
+                deviceId={deviceId()!}
+                daysLeft={daysLeft()}
+                expiryDate={expiryDate()}
+                licenseType={licenseType()}
                 />
             </Show>
             </footer>

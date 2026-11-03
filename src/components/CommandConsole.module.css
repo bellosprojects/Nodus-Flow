@@ -228,6 +228,22 @@
     color: #e7eef5;
 }
 
+.clientTarget {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #91a0ad;
+}
+
+.clientTarget select {
+    padding: 7px;
+    border: 1px solid rgba(129, 158, 177, 0.3);
+    border-radius: 5px;
+    background: #0b1117;
+    color: #e7eef5;
+    font: inherit;
+}
+
 .pairToken,
 .pairedClients {
     display: flex;
@@ -248,4 +264,9 @@
 
 .bridgeError {
     color: #ff8e8e !important;
+}
+
+.bridgeNotice {
+    overflow-wrap: anywhere;
+    color: #91dcd2 !important;
 }

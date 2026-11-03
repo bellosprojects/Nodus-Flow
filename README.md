@@ -37,7 +37,7 @@ Nodus Flow es una aplicación de escritorio para crear y compartir diagramas int
 
 - **Paleta de comandos** (`Ctrl+K`): buscar nodos, saltar a ellos y ejecutar acciones de edición, selección, conexiones, zoom, importación y exportación.
 - **Consola Nodus** (`Ctrl + Backquote` por defecto): disponible también en inicio de sesión, registro y licencia. Permite consultar el estado visible y operar el lobby, el editor y la ventana con comandos semánticos; el atajo se puede cambiar desde la consola.
-- **Integración local con IA y herramientas externas**: servidor JSON-RPC local activable desde la consola y adaptador MCP para clientes compatibles. El acceso se empareja y revoca por cliente, y respeta los permisos y confirmaciones de Nodus.
+- **Integración local con IA y herramientas externas**: MCP por HTTP y un adaptador `stdio` incluido en la aplicación. AI Access puede configurar VS Code/Copilot, Claude Desktop y Cursor con confirmación y copias de respaldo; las credenciales se guardan en el almacén seguro del sistema.
 - **Simulación de flujo de datos**: al habilitar el modo en la configuración, ejecutar el flujo desde un nodo elíptico seleccionado y visualizar su recorrido por las conexiones.
 - **Evaluación Heza** desde la paleta de comandos.
 

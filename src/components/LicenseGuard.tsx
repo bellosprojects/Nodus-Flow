@@ -14,6 +14,7 @@ export interface LicenseCommandController {
     message: string;
     expiresAt: string | null;
     daysLeft: number | null;
+    licenseType: 'finite' | 'unlimited' | null;
     deviceId: string | null;
     supportEmail: string;
     loading: boolean;
@@ -27,6 +28,7 @@ export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
     licenseMessage, 
     expiryDate, 
     daysLeft,
+    licenseType,
     isLoading,
     checkLicense,
     deviceId,
@@ -43,6 +45,7 @@ export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
         message: licenseMessage(),
         expiresAt: expiryDate()?.toISOString() ?? null,
         daysLeft: daysLeft(),
+        licenseType: licenseType(),
         deviceId: deviceId(),
         supportEmail: supportMail,
         loading: isLoading()
