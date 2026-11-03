@@ -1,10 +1,24 @@
 // src/components/LicenseGuard.tsx
-import { Component, JSX, Show } from 'solid-js';
+import { Component, JSX, Show, onCleanup, onMount } from 'solid-js';
 import { useLicense } from '../services/license';
 import "../index.css";
 
 interface LicenseGuardProps {
   children: JSX.Element;
+  onController?: (controller: LicenseCommandController | null) => void;
+}
+
+export interface LicenseCommandController {
+  status: () => {
+    valid: boolean | null;
+    message: string;
+    expiresAt: string | null;
+    daysLeft: number | null;
+    deviceId: string | null;
+    supportEmail: string;
+    loading: boolean;
+  };
+  retry: () => Promise<boolean>;
 }
 
 export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
@@ -12,6 +26,7 @@ export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
     licenseValid, 
     licenseMessage, 
     expiryDate, 
+    daysLeft,
     isLoading,
     checkLicense,
     deviceId,
@@ -20,6 +35,23 @@ export const LicenseGuard: Component<LicenseGuardProps> = (props) => {
 
   // Leer versión desde Vite (o usar default)
   const appVersion = import.meta.env.VITE_APP_VERSION || '1.0.0';
+
+  onMount(() => {
+    props.onController?.({
+      status: () => ({
+        valid: licenseValid(),
+        message: licenseMessage(),
+        expiresAt: expiryDate()?.toISOString() ?? null,
+        daysLeft: daysLeft(),
+        deviceId: deviceId(),
+        supportEmail: supportMail,
+        loading: isLoading()
+      }),
+      retry: checkLicense
+    });
+  });
+
+  onCleanup(() => props.onController?.(null));
 
   // Icono SVG de candado (reemplaza 🔒)
   const LockIcon = () => (

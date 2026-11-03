@@ -141,3 +141,111 @@
 .inputRow input::placeholder {
     color: #72808b;
 }
+
+.aiPanel {
+    position: fixed;
+    z-index: 420;
+    right: 12px;
+    bottom: 54px;
+    display: flex;
+    width: min(440px, calc(100vw - 24px));
+    max-height: min(78vh, 680px);
+    flex-direction: column;
+    gap: 10px;
+    overflow: auto;
+    padding: 14px;
+    border: 1px solid rgba(129, 158, 177, 0.4);
+    border-radius: 10px;
+    background: #101820;
+    color: #e7eef5;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.48);
+    font: 12px/1.5 Inter, sans-serif;
+}
+
+.aiPanel header,
+.pairedClients > div,
+.pairClient {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.aiPanel header strong {
+    color: #72b3ab;
+}
+
+.aiPanel p {
+    margin: 0;
+    color: #b7c3cd;
+}
+
+.aiPanel button {
+    flex: 0 0 auto;
+    padding: 6px 9px;
+    border: 1px solid rgba(129, 158, 177, 0.3);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #e7eef5;
+    font: inherit;
+    cursor: pointer;
+}
+
+.aiPanel button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.aiPanel code {
+    display: block;
+    overflow-wrap: anywhere;
+    padding: 8px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.24);
+    color: #91dcd2;
+    font: 11px/1.5 Consolas, "Courier New", monospace;
+}
+
+.bridgeStatus strong {
+    color: #91dcd2;
+}
+
+.pairClient label {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    color: #91a0ad;
+}
+
+.pairClient input {
+    min-width: 0;
+    padding: 7px;
+    border: 1px solid rgba(129, 158, 177, 0.3);
+    border-radius: 5px;
+    background: #0b1117;
+    color: #e7eef5;
+}
+
+.pairToken,
+.pairedClients {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(129, 158, 177, 0.2);
+}
+
+.pairToken strong,
+.pairedClients > strong {
+    color: #f0c674;
+}
+
+.pairToken small {
+    color: #91a0ad;
+}
+
+.bridgeError {
+    color: #ff8e8e !important;
+}

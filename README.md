@@ -36,9 +36,12 @@ Nodus Flow es una aplicación de escritorio para crear y compartir diagramas int
 ### Herramientas y automatización
 
 - **Paleta de comandos** (`Ctrl+K`): buscar nodos, saltar a ellos y ejecutar acciones de edición, selección, conexiones, zoom, importación y exportación.
-- **Consola Nodus** (`Ctrl+~` por defecto): administrar proyectos, nodos y conexiones mediante comandos de la aplicación. El atajo se puede cambiar desde la consola.
+- **Consola Nodus** (`Ctrl + Backquote` por defecto): disponible también en inicio de sesión, registro y licencia. Permite consultar el estado visible y operar el lobby, el editor y la ventana con comandos semánticos; el atajo se puede cambiar desde la consola.
+- **Integración local con IA y herramientas externas**: servidor JSON-RPC local activable desde la consola y adaptador MCP para clientes compatibles. El acceso se empareja y revoca por cliente, y respeta los permisos y confirmaciones de Nodus.
 - **Simulación de flujo de datos**: al habilitar el modo en la configuración, ejecutar el flujo desde un nodo elíptico seleccionado y visualizar su recorrido por las conexiones.
 - **Evaluación Heza** desde la paleta de comandos.
+
+El inicio de sesión y el registro desde la consola solicitan la contraseña en un campo enmascarado; las contraseñas no aparecen en el historial. Las acciones destructivas y el cierre de sesión solicitan confirmación, que se puede omitir explícitamente con `--yes` cuando el comando lo admite.
 
 La consola acepta comandos de Nodus; no es una terminal y no ejecuta Bash, PowerShell, JavaScript ni comandos del sistema.
 
@@ -60,7 +63,7 @@ Los atajos de edición requieren permisos de propietario o editor. En macOS, usa
 | Atajo | Acción |
 |---|---|
 | `Ctrl/Cmd + K` | Abrir o cerrar la paleta de comandos |
-| `Ctrl + ~` | Abrir o cerrar la consola Nodus (configurable) |
+| `Ctrl + Backquote` | Abrir o cerrar la consola Nodus (configurable) |
 | `N` | Herramienta de creación de nodos |
 | `V` | Herramienta de selección |
 | `H` | Herramienta de movimiento |
@@ -83,8 +86,20 @@ Los atajos de edición requieren permisos de propietario o editor. En macOS, usa
 
 Escribe `help` dentro de la consola para consultar la sintaxis. Los grupos de comandos disponibles son:
 
+Consulta la [guía completa de la consola](docs/consola.md) para ver cada variación, parámetro, permiso, confirmación y ejemplo de uso.
+
+Para conectar Copilot u otro cliente compatible, consulta la [guía de integración con IA](docs/integracion-ia.md) y la [referencia de capacidades para agentes](docs/agentes-nodus.md). La integración funciona en la aplicación Tauri, no en modo Vite; no expone credenciales de cuenta ni el intérprete Heza.
+
 ```text
-project list [--json]
+app inspect [--json]
+app home
+app fullscreen [status|on|off|toggle]
+auth status|view login|view signup|login <email>|signup <email> <nickname>|logout [--yes]
+license status|retry|contact
+console status|open|close|toggle|resize <height>|shortcut|history
+toast list|click|dismiss <id>
+
+project list|public|resume|info
 project create "Nombre" [--visibility private|shared|public]
 project open <id>
 project rename "Nuevo nombre" [--project <id>]
@@ -92,19 +107,37 @@ project visibility set private|shared|public [--project <id>]
 project lock|unlock|delete <id> [--yes]
 project member list|add|ban|unban|role|owner ...
 project request list|approve|reject|access ...
+project activity list
 project prop list|set|del ...
 
-node list|get|create|update|delete ...
+editor status|home|fullscreen|undo|redo|run|ping
+editor panel list|open|close|toggle <panel>
+editor tool list|set <tool>
+editor layer-view nodes|connections
+editor selection list|clear|all|invert|unconnected|select <node>...
+editor clipboard copy|cut|paste|duplicate
+editor camera center|zoom <0.1..5>|pan <x> <y>
+editor share
+editor autosaves list|restore <timestamp> [--yes]
+editor export png [scale]|svg|json
+editor import json
+diagram export png [scale]|svg|json
+diagram import json
+
+node list|get|create|update|select|deselect|lock|unlock|delete ...
 node prop list|set|del ...
 
-connection list|get|create|delete ...
+connection list|get|select|create|complete|style|delete ...
 connection prop list|set|del ...
+canvas clear|reset|zoom <0.1..5>
+generate MR2ER
+eval <Heza expression>
 
 help
 clear
 ```
 
-Los comandos destructivos solicitan confirmación; `--yes` omite esa confirmación. Usa comillas para valores que contengan espacios. `--json` solicita una salida JSON cuando está disponible.
+Los comandos de edición respetan el rol de la sala; los lectores conservan las acciones de consulta, navegación, compartir y exportación. Usa comillas para valores que contengan espacios. `--json` solicita una salida JSON cuando está disponible.
 
 ## Capturas de pantalla
 
@@ -141,6 +174,7 @@ Los comandos destructivos solicitan confirmación; `--yes` omite esa confirmaci�
 
 - Node.js y npm.
 - Rust y los requisitos de compilación de Tauri 2 para tu sistema operativo.
+- El sidecar nativo Heza correspondiente al target, que no se distribuye en este repositorio.
 
 La autenticación, las salas, las licencias y la colaboración necesitan conexión con los servicios de Nodus Flow.
 

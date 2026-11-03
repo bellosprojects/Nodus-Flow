@@ -1,8 +1,13 @@
-import { createEffect, createSignal, For, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
     executeConsoleCommand,
-    type CommandConsoleView
+    completeConsoleAuthPrompt,
+    type CommandConsoleOptions,
+    type ConsoleAuthPrompt
 } from "../core/commandConsole";
+import { handleAiBridgeRequest } from "../core/aiTools";
 import styles from "./CommandConsole.module.css";
 
 type ConsoleEntry = {
@@ -17,6 +22,25 @@ type ConsoleShortcut = {
     meta: boolean;
     alt: boolean;
     shift: boolean;
+};
+
+type BridgeStatus = {
+    enabled: boolean;
+    endpoint: string;
+};
+
+type BridgeClient = {
+    id: string;
+    name: string;
+    createdAt: number;
+};
+
+type BridgeRequest = {
+    requestId: string;
+    clientId: string;
+    clientName: string;
+    method: string;
+    params: unknown;
 };
 
 const HISTORY_LIMIT = 100;
@@ -71,10 +95,7 @@ const loadShortcut = (): ConsoleShortcut => {
     return DEFAULT_SHORTCUT;
 };
 
-export const CommandConsole = (props: {
-    onNavigate: (view: CommandConsoleView) => void;
-    prepareForProjectNavigation: () => Promise<void>;
-}) => {
+export const CommandConsole = (props: { options: CommandConsoleOptions }) => {
     const [isOpen, setIsOpen] = createSignal(false);
     const [input, setInput] = createSignal("");
     const [entries, setEntries] = createSignal<ConsoleEntry[]>([
@@ -83,12 +104,22 @@ export const CommandConsole = (props: {
     const [history, setHistory] = createSignal<string[]>([]);
     const [historyIndex, setHistoryIndex] = createSignal(-1);
     const [isRunning, setIsRunning] = createSignal(false);
+    const [authPrompt, setAuthPrompt] = createSignal<ConsoleAuthPrompt | null>(null);
     const [panelHeight, setPanelHeight] = createSignal(loadPanelHeight());
     const [shortcut, setShortcut] = createSignal(loadShortcut());
     const [isRecordingShortcut, setIsRecordingShortcut] = createSignal(false);
+    const [showAiAccess, setShowAiAccess] = createSignal(false);
+    const [bridgeStatus, setBridgeStatus] = createSignal<BridgeStatus | null>(null);
+    const [bridgeClients, setBridgeClients] = createSignal<BridgeClient[]>([]);
+    const [bridgeClientName, setBridgeClientName] = createSignal("VS Code");
+    const [newBridgeToken, setNewBridgeToken] = createSignal("");
+    const [bridgeError, setBridgeError] = createSignal("");
+    const [bridgeBusy, setBridgeBusy] = createSignal(false);
     let nextEntryId = 1;
     let inputRef: HTMLInputElement | undefined;
     let outputRef: HTMLDivElement | undefined;
+    let unlistenBridge: (() => void) | undefined;
+    let bridgeListenerDisposed = false;
     let resizeStartY = 0;
     let resizeStartHeight = 0;
 
@@ -136,17 +167,185 @@ export const CommandConsole = (props: {
         setEntries(previous => [...previous, { id: nextEntryId++, kind, text }].slice(-HISTORY_LIMIT));
     };
 
+    const getConsoleState = () => ({
+            open: isOpen(),
+            height: panelHeight(),
+            shortcut: shortcutLabel(),
+            recordingShortcut: isRecordingShortcut()
+        });
+
+    const commandOptions = (): CommandConsoleOptions => ({
+        ...props.options,
+        getConsoleState,
+        getConsoleHistory: () => history(),
+        setConsoleOpen: open => setIsOpen(open),
+        setConsoleHeight: height => {
+            setPanelHeight(height);
+            localStorage.setItem("nodus_console_height", String(height));
+        },
+        recordConsoleShortcut: () => setIsRecordingShortcut(true)
+    });
+
+    const refreshBridgeState = async () => {
+        if (!isTauri()) {
+            setBridgeError("AI integration is available only in the native Tauri app.");
+            return;
+        }
+        try {
+            const [status, clients] = await Promise.all([
+                invoke<BridgeStatus>("get_ai_bridge_status"),
+                invoke<BridgeClient[]>("list_ai_bridge_clients")
+            ]);
+            setBridgeStatus(status);
+            setBridgeClients(clients);
+            setBridgeError("");
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        }
+    };
+
+    const startBridge = async () => {
+        setBridgeBusy(true);
+        try {
+            const status = await invoke<BridgeStatus>("start_ai_bridge");
+            setBridgeStatus(status);
+            setBridgeError("");
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBridgeBusy(false);
+        }
+    };
+
+    const stopBridge = async () => {
+        setBridgeBusy(true);
+        try {
+            const status = await invoke<BridgeStatus>("stop_ai_bridge");
+            setBridgeStatus(status);
+            setBridgeError("");
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBridgeBusy(false);
+        }
+    };
+
+    const pairBridgeClient = async () => {
+        const name = bridgeClientName().trim();
+        if (!name) {
+            setBridgeError("Enter a name for this AI client.");
+            return;
+        }
+        setBridgeBusy(true);
+        try {
+            const result = await invoke<{ client: BridgeClient; token: string }>(
+                "pair_ai_bridge_client",
+                { name }
+            );
+            setNewBridgeToken(result.token);
+            await refreshBridgeState();
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBridgeBusy(false);
+        }
+    };
+
+    const revokeBridgeClient = async (client: BridgeClient) => {
+        if (!window.confirm(`Revoke access for "${client.name}"?`)) return;
+        setBridgeBusy(true);
+        try {
+            await invoke("revoke_ai_bridge_client", { clientId: client.id });
+            setNewBridgeToken("");
+            await refreshBridgeState();
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : String(error));
+        } finally {
+            setBridgeBusy(false);
+        }
+    };
+
+    const copyBridgeToken = async () => {
+        try {
+            await navigator.clipboard.writeText(newBridgeToken());
+            setBridgeError("Pairing token copied. Store it in the AI client's secret input, not in a tracked file.");
+        } catch (error) {
+            setBridgeError(error instanceof Error ? error.message : "Could not copy the pairing token.");
+        }
+    };
+
+    const handleBridgeRequest = async (request: BridgeRequest) => {
+        let response: unknown;
+        try {
+            response = await handleAiBridgeRequest(request.method, request.params, {
+                ...commandOptions(),
+                externalInvocation: true,
+                confirm: message => window.confirm(
+                    `AI client "${request.clientName}" requests:\n\n${message}`
+                )
+            });
+            if (request.method === "tools/call") {
+                const call = request.params as { name?: unknown };
+                const toolResponse = response as { isError?: boolean };
+                append("command", `AI client "${request.clientName}" · ${String(call.name || "tool call")}`);
+                append(
+                    toolResponse.isError ? "error" : "success",
+                    toolResponse.isError ? "Tool call failed." : "Tool call completed."
+                );
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            response = {
+                content: [{ type: "text", text: message }],
+                isError: true
+            };
+            append("error", `AI client "${request.clientName}" · tool call failed.`);
+            console.error("AI tool call failed.", error);
+        }
+
+        try {
+            await invoke("complete_ai_bridge_request", {
+                requestId: request.requestId,
+                result: response
+            });
+        } catch (error) {
+            console.error("Could not return AI bridge response to the native host.", error);
+        }
+    };
+
     const runCommand = async (value: string) => {
         const command = value.trim();
         if (!command || isRunning()) return;
+
+        if (authPrompt()) {
+            const prompt = authPrompt()!;
+            if (command.toLowerCase() === ":cancel") {
+                setAuthPrompt(null);
+                setInput("");
+                append("success", "Authentication prompt cancelled.");
+                return;
+            }
+            setInput("");
+            setIsRunning(true);
+            try {
+                const result = await completeConsoleAuthPrompt(prompt, command, commandOptions());
+                setAuthPrompt(result.prompt || null);
+                append(result.ok ? "success" : "error", result.output);
+            } catch (error) {
+                setAuthPrompt(null);
+                append("error", error instanceof Error ? error.message : "Authentication failed.");
+            } finally {
+                setIsRunning(false);
+            }
+            return;
+        }
 
         setHistory(previous => [...previous.filter(item => item !== command), command].slice(-HISTORY_LIMIT));
         setHistoryIndex(-1);
         setInput("");
         setIsRunning(true);
         const result = await executeConsoleCommand(command, {
-            navigate: props.onNavigate,
-            prepareForProjectNavigation: props.prepareForProjectNavigation,
+            ...commandOptions(),
             confirm: message => window.confirm(message)
         });
         setIsRunning(false);
@@ -158,6 +357,7 @@ export const CommandConsole = (props: {
 
         append("command", `> ${command}`);
         if (result.output) append(result.ok ? "success" : "error", result.output);
+        setAuthPrompt(result.prompt || null);
     };
 
     const handleGlobalKeyDown = (event: KeyboardEvent) => {
@@ -195,8 +395,22 @@ export const CommandConsole = (props: {
         }
     };
 
-    onMount(() => window.addEventListener("keydown", handleGlobalKeyDown, true));
+    onMount(() => {
+        window.addEventListener("keydown", handleGlobalKeyDown, true);
+        if (!isTauri()) return;
+        void refreshBridgeState();
+        void listen<BridgeRequest>("nodus-ai-bridge-request", event => {
+            void handleBridgeRequest(event.payload);
+        }).then(unlisten => {
+            if (bridgeListenerDisposed) unlisten();
+            else unlistenBridge = unlisten;
+        }).catch(error => {
+            console.error("Could not listen for native AI bridge requests.", error);
+        });
+    });
     onCleanup(() => {
+        bridgeListenerDisposed = true;
+        unlistenBridge?.();
         window.removeEventListener("keydown", handleGlobalKeyDown, true);
         stopResizing();
     });
@@ -218,6 +432,12 @@ export const CommandConsole = (props: {
             void runCommand(input());
         } else if (event.key === "Escape") {
             event.preventDefault();
+            if (authPrompt()) {
+                setAuthPrompt(null);
+                setInput("");
+                append("success", "Authentication prompt cancelled.");
+                return;
+            }
             setIsOpen(false);
         } else if (event.key === "ArrowUp") {
             event.preventDefault();
@@ -267,6 +487,17 @@ export const CommandConsole = (props: {
                             App commands · {isRecordingShortcut() ? "Press Ctrl/Meta/Alt shortcut (Esc cancels)" : `${shortcutLabel()} to toggle`}
                         </span>
                         <button
+                            aria-label="Manage AI integration"
+                            title="Manage local AI access"
+                            onClick={() => {
+                                const wasOpen = showAiAccess();
+                                setShowAiAccess(!wasOpen);
+                                if (!wasOpen) void refreshBridgeState();
+                            }}
+                        >
+                            AI Access
+                        </button>
+                        <button
                             aria-label="Change command-console shortcut"
                             title="Set keyboard shortcut"
                             onClick={() => setIsRecordingShortcut(true)}
@@ -291,18 +522,104 @@ export const CommandConsole = (props: {
                         <input
                             id="nodus-command-input"
                             ref={inputRef}
+                            type={authPrompt() ? "password" : "text"}
                             value={input()}
                             onInput={event => setInput(event.currentTarget.value)}
                             onKeyDown={handleInputKeyDown}
                             autocomplete="off"
                             autocapitalize="off"
                             spellcheck={false}
-                            placeholder={isRunning() ? "Running..." : 'Type "help" for commands'}
+                            placeholder={
+                                isRunning()
+                                    ? "Running..."
+                                    : authPrompt()
+                                        ? 'Password entry is masked; type ":cancel" to abort'
+                                        : 'Type "help" for commands'
+                            }
                             disabled={isRunning()}
                         />
                     </form>
                 </section>
             )}
+            <Show when={showAiAccess()}>
+                <section class={styles.aiPanel} role="dialog" aria-label="AI integration access">
+                    <header>
+                        <strong>Local AI access</strong>
+                        <button aria-label="Close AI access panel" onClick={() => {
+                            setShowAiAccess(false);
+                            setNewBridgeToken("");
+                            setBridgeError("");
+                        }}>×</button>
+                    </header>
+                    <p>
+                        Requests run through your active Nodus session and room role.
+                        Sensitive actions require confirmation. Login credentials and Heza eval are not exposed.
+                    </p>
+                    <Show when={isTauri()} fallback={
+                        <p class={styles.bridgeError}>Use the native Tauri app to enable the bridge; Vite browser mode cannot host it.</p>
+                    }>
+                        <p class={styles.bridgeStatus}>
+                            Bridge: <strong>{bridgeStatus()?.enabled ? "enabled" : "disabled"}</strong>
+                        </p>
+                        <Show when={bridgeStatus()?.enabled} fallback={
+                            <button disabled={bridgeBusy()} onClick={() => void startBridge()}>
+                                Enable local bridge
+                            </button>
+                        }>
+                            <code>{bridgeStatus()?.endpoint}</code>
+                            <button disabled={bridgeBusy()} onClick={() => void stopBridge()}>
+                                Disable local bridge
+                            </button>
+                        </Show>
+                        <div class={styles.pairClient}>
+                            <label>
+                                Client name
+                                <input
+                                    value={bridgeClientName()}
+                                    onInput={event => setBridgeClientName(event.currentTarget.value)}
+                                    maxlength="60"
+                                    disabled={bridgeBusy() || !bridgeStatus()?.enabled}
+                                />
+                            </label>
+                            <button
+                                disabled={bridgeBusy() || !bridgeStatus()?.enabled}
+                                onClick={() => void pairBridgeClient()}
+                            >
+                                Pair client
+                            </button>
+                        </div>
+                        <Show when={newBridgeToken()}>
+                            <div class={styles.pairToken}>
+                                <strong>Copy this token now. It cannot be shown again.</strong>
+                                <code>{newBridgeToken()}</code>
+                                <button onClick={() => void copyBridgeToken()}>Copy token</button>
+                                <small>Never store this token in a repository or send it in an AI prompt.</small>
+                            </div>
+                        </Show>
+                        <Show when={bridgeClients().length > 0}>
+                            <div class={styles.pairedClients}>
+                                <strong>Paired clients</strong>
+                                <For each={bridgeClients()}>
+                                    {client => (
+                                        <div>
+                                            <span>{client.name}</span>
+                                            <button
+                                                disabled={bridgeBusy()}
+                                                onClick={() => void revokeBridgeClient(client)}
+                                            >
+                                                Revoke
+                                            </button>
+                                        </div>
+                                    )}
+                                </For>
+                            </div>
+                        </Show>
+                        <Show when={bridgeError()}>
+                            <p class={styles.bridgeError}>{bridgeError()}</p>
+                        </Show>
+                    </Show>
+                </section>
+            </Show>
         </>
     );
 };

@@ -1,0 +1,21 @@
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "nodus-bridge-token-v2",
+      "description": "Nodus AI bridge pairing token",
+      "password": true
+    }
+  ],
+  "servers": {
+    "nodus-flow": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/tools/nodus-mcp.mjs"],
+      "env": {
+        "NODUS_BRIDGE_URL": "http://127.0.0.1:47831/v1/rpc",
+        "NODUS_BRIDGE_TOKEN": "${input:nodus-bridge-token-v2}"
+      }
+    }
+  }
+}

@@ -68,7 +68,7 @@ function getParagraph(CK: CanvasKit, text: string, style: any, fontMgr: FontMgr,
 
     if(!paragraph){
         const builder = CK.ParagraphBuilder.Make(style, fontMgr);
-        builder.addText(text);
+        builder.addText(`${text}`);
         paragraph = builder.build();
         builder.delete();
 

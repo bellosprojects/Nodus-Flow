@@ -14,8 +14,13 @@ import { Signup } from "./views/Auth/Singup";
 import { authStore } from "./models/authStore";
 import { LOADER } from "./views/components/Transition";
 import { CommandConsole } from "./components/CommandConsole";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { login, logout, signup } from "./models/authStore";
+import type { LicenseCommandController } from "./components/LicenseGuard";
 
 const startView : 'lobby' | 'editor' = 'lobby';
+type MainView = 'lobby' | 'editor';
 
 const handleContextMenu = (event: MouseEvent) => {
     const target = event.target;
@@ -23,19 +28,14 @@ const handleContextMenu = (event: MouseEvent) => {
         return;
     }
 
-    event.preventDefault();
+    //event.preventDefault();
 };
 
-function NodusFlowApp(props: {started: boolean}) {
-
-    const [currentView, setCurrentView] = createSignal<'lobby' | 'editor'>(props.started? 'editor' : startView);
+function NodusFlowApp(props: {
+    currentView: () => MainView;
+    onNavigate: (view: MainView) => void;
+}) {
     let canvasRef : HTMLCanvasElement | undefined;
-
-    createEffect(() => {
-        if (props.started) {
-            setCurrentView('editor');
-        }
-    });
 
     onMount(async () => {
         if(canvasRef){
@@ -48,17 +48,6 @@ function NodusFlowApp(props: {started: boolean}) {
             });
         }
     });
-
-    const handleNavigate = (view: 'editor' | 'lobby') => {
-        setCurrentView(view);
-    };
-
-    const prepareForProjectNavigation = async () => {
-        if (currentView() === 'editor') {
-            setCurrentView('lobby');
-            await new Promise<void>(resolve => window.setTimeout(resolve, 0));
-        }
-    };
 
     return (
         <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
@@ -80,40 +69,33 @@ function NodusFlowApp(props: {started: boolean}) {
 
     
             <Switch>
-                <Match when={currentView() === 'lobby'}>
-                    <Lobby onNavigate={handleNavigate}/>
+                <Match when={props.currentView() === 'lobby'}>
+                    <Lobby onNavigate={props.onNavigate}/>
                 </Match>
 
-                <Match when={currentView() === 'editor'}>
-                    <Editor onNavigate={handleNavigate}/>
+                <Match when={props.currentView() === 'editor'}>
+                    <Editor onNavigate={props.onNavigate}/>
                 </Match>
             </Switch>
-
-            <CommandConsole
-                onNavigate={handleNavigate}
-                prepareForProjectNavigation={prepareForProjectNavigation}
-            />
         </div>
     );
 }
 
-function AuthRouter() {
-    const [showSignup, setShowSignup] = createSignal(false);
-
+function AuthRouter(props: {showSignup: () => boolean; setShowSignup: (value: boolean) => void}) {
     const handleLoginSuccess = () => {
         // La app se mostrará automáticamente porque isAuthenticated cambió
     };
 
     return (
-        <Show when={!showSignup()} fallback={
+        <Show when={!props.showSignup()} fallback={
             <Signup 
-                onSuccess={() => setShowSignup(false)} 
-                onSwitchToLogin={() => setShowSignup(false)} 
+                onSuccess={() => props.setShowSignup(false)}
+                onSwitchToLogin={() => props.setShowSignup(false)}
             />
         }>
             <Login 
                 onSuccess={handleLoginSuccess} 
-                onSwitchToSignup={() => setShowSignup(true)}
+                onSwitchToSignup={() => props.setShowSignup(true)}
             />
         </Show>
     );
@@ -124,6 +106,61 @@ function App() {
     const isAuthenticated = createMemo(() => authStore.isAuthenticated);
 
     const [isExternalOpen, setIsExternalOpen] = createSignal(false);
+    const [showSignup, setShowSignup] = createSignal(false);
+    const [currentView, setCurrentView] = createSignal<MainView>(startView);
+    const [licenseController, setLicenseController] = createSignal<LicenseCommandController | null>(null);
+
+    createEffect(() => {
+        if (isExternalOpen()) setCurrentView('editor');
+    });
+
+    const screen = () => {
+        if (!isAuthenticated()) return showSignup() ? "signup" : "login";
+        const status = licenseController()?.status();
+        if (!status || status.loading) return "license-loading";
+        if (!status.valid) return "license";
+        return currentView();
+    };
+
+    const setFullscreen = async (value?: boolean) => {
+        const appWindow = getCurrentWindow();
+        const current = await appWindow.isFullscreen();
+        const next = value ?? !current;
+        if (next !== current) await appWindow.setFullscreen(next);
+        return next;
+    };
+
+    const consoleOptions = {
+        getScreen: screen,
+        setAuthView: (view: "login" | "signup") => setShowSignup(view === "signup"),
+        login,
+        signup,
+        logout,
+        retryLicense: async () => {
+            const controller = licenseController();
+            if (!controller) throw new Error("License validation is not available yet.");
+            return controller.retry();
+        },
+        getLicenseStatus: () => licenseController()?.status() ?? { loading: true },
+        openLicenseSupport: async () => {
+            const supportEmail = licenseController()?.status().supportEmail;
+            if (!supportEmail) throw new Error("License support email is unavailable.");
+            await openUrl(`mailto:${supportEmail}`);
+        },
+        getFullscreen: async () => getCurrentWindow().isFullscreen(),
+        setFullscreen,
+        onHome: () => {
+            if (screen() !== "editor") throw new Error("Home is only available from the editor.");
+            setCurrentView("lobby");
+        },
+        prepareForProjectNavigation: async () => {
+            if (currentView() === 'editor') {
+                setCurrentView('lobby');
+                await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+            }
+        },
+        navigate: (view: MainView) => setCurrentView(view)
+    };
 
     onMount(() => {
         initializeGlobalKeyboardEvents();
@@ -185,11 +222,21 @@ function App() {
     return (
         <>
             <LOADER />
-            <Show when={isAuthenticated()} fallback={<AuthRouter />}>
-                <LicenseGuard>
-                    <NodusFlowApp started={isExternalOpen()}/>
+            <Show when={!isAuthenticated()}>
+                <AuthRouter
+                    showSignup={showSignup}
+                    setShowSignup={setShowSignup}
+                />
+            </Show>
+            <Show when={isAuthenticated()}>
+                <LicenseGuard onController={setLicenseController}>
+                    <NodusFlowApp
+                        currentView={currentView}
+                        onNavigate={setCurrentView}
+                    />
                 </LicenseGuard>
             </Show>
+            <CommandConsole options={consoleOptions} />
         </>
     );
 }
