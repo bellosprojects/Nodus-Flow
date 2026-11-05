@@ -1,7 +1,7 @@
 // utils/commands.ts
 import { nodusCanvas } from "../core/NodusCanvas";
 import { connections } from "../models/connections";
-import { nodes } from "../models/nodes";
+import { getNode, nodes, selectedNodesIds } from "../models/nodes";
 import { addCurrentProjectProperty, updateCurrentProjectName, userData } from "../models/userStore";
 import { 
     actionCreateNode, 
@@ -148,6 +148,8 @@ import { wsService } from "../core/socket";
 import { generarUUID } from "./math";
 import { generateMRFromER } from "./MRFromER";
 import { invoke } from "@tauri-apps/api/core";
+import { nodusPluginManager } from "../plugins/plugins";
+import { ImagePlugin } from "../plugins/ImagePlugin";
 
 export const importFromQuery = (_?: string) => {
     try {
@@ -460,4 +462,32 @@ export const evalValueFromCommand = async (query?: string) => {
         console.error("Error al comunicarse con Heza:", error);
         return "Error";
     }
+}
+
+export const addPluginToNodeFromCommand = (arg?: string) => {
+
+    if(!arg) return;
+    const pluginID = arg.split(/\s+/)[0];
+    const selectedIds = selectedNodesIds();
+
+    console.log("Selected Ids:", selectedIds);
+    if (selectedIds.length === 0) return;
+
+    actionAddNodePropertyToSelected('pluginId', pluginID);
+
+
+    // selectedIds.forEach(nodeId => {
+    //     const node = getNode(nodeId);
+    //     if(node){
+
+    //         nodusPluginManager.initNodePlugin(nodeId, pluginID, node, {
+    //             createCanvas(width, height) {
+    //                 return document.createElement('canvas');
+    //             },
+    //         });
+    //     } else {
+    //         console.warn(`Node ${nodeId} not found`);
+    //     }
+    // });
+
 }

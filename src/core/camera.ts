@@ -1,7 +1,7 @@
 import { Canvas } from "canvaskit-wasm";
 import { createSignal } from "solid-js"
 import { calculateDiagramBounds } from "../utils/path";
-import { nodes } from "../models/nodes";
+import { Node, nodes } from "../models/nodes";
 
 export const createCameraStore = () => {
     
@@ -188,6 +188,17 @@ export const createCameraStore = () => {
         }
     }
 
+    const pointOnNode = (screenX: number, screenY: number, node: Node) => {
+        const {x, y} = screenToWordl(screenX, screenY);
+        if (x < node.x || x > node.x + node.width || y < node.y || y > node.y + node.height) {
+            return {x: null, y: null};
+        }
+        const nodeX = x - node.x;
+        const nodeY = y - node.y;
+
+        return {x: nodeX / node.width, y: nodeY / node.height};
+    }
+
     return {
         offsetX, offsetY, zoom,
         setOffsetX, setOffsetY, setZoom,
@@ -204,6 +215,7 @@ export const createCameraStore = () => {
         offsetToCenterPoint,
         centerCameraNow,
         getWordlSize,
-        getViewportBounds
+        getViewportBounds,
+        pointOnNode
     };
 }

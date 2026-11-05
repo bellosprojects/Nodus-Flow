@@ -1,4 +1,4 @@
-import CanvasKitInit, {Surface, FontMgr, CanvasKit} from "canvaskit-wasm";
+import CanvasKitInit, {Surface, FontMgr, CanvasKit, Paint} from "canvaskit-wasm";
 import { getFontData } from "./engine";
 import { mouseEvents } from "../utils/mouse";
 import { createCameraStore } from "./camera";
@@ -23,13 +23,14 @@ class NodusCanvas {
     private viewportCenterWorld: {x: number, y: number} | null = null;
     public isResizing = createSignal(false);
     public viewName : "lobby" | "editor" = "lobby";
+    public standardPaint! : Paint;
 
     async init(canvasElement: HTMLCanvasElement){
         console.log("[NodusCanvas] Init started");
         this.canvasRef = canvasElement;
         this.viewportWidth = window.innerWidth;
         this.viewportHeight = window.innerHeight;
-
+        
         this.canvasRef.addEventListener("mousedown", (e) => {
             e.preventDefault();
 
@@ -55,10 +56,12 @@ class NodusCanvas {
                 mouseEvents.onUp(e);
             }
         });
-
+        
         this.CK = await CanvasKitInit({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/canvaskit-wasm@0.39.1/bin/${file}`
         });
+        this.standardPaint = new this.CK.Paint();
+        this.standardPaint.setAntiAlias(true);
 
         this.font = this.CK.FontMgr.FromData(await getFontData());
 
@@ -230,6 +233,7 @@ class NodusCanvas {
             this.sufrace.delete();
             this.sufrace = null;
         }
+        this.standardPaint.delete();
     }
 }
 

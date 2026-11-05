@@ -8,7 +8,7 @@ import { exportDiagramAsPng, exportDiagramAsSVG } from "../../../../core/rendere
 import { exportAsJson } from "../../../../models/userStore";
 import { nodusCanvas } from "../../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../../utils/path";
-import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate, setZoomFromCommand, evalValueFromCommand } from "../../../../utils/commands";
+import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate, setZoomFromCommand, evalValueFromCommand, addPluginToNodeFromCommand } from "../../../../utils/commands";
 import { connections, setSelectedConnectionId } from "../../../../models/connections";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);
@@ -25,6 +25,7 @@ export type OmniItem = {
 
 enum CommandID {
     ReloadWindow = "RELOAD_WINDOW",
+    InstacePlugin = "INSTACE_PLUGIN",
     ExportPng = "EXPORT_PNG",
     ExportSvg = "EXPORT_SVG",
     ExportJson = "EXPORT_JSON",
@@ -60,6 +61,11 @@ const COMMANDS_BASE: Record<CommandID, {label: string; action: (arg?: string) =>
             location.reload();
         },
         color: "#c8e73e"
+    },
+    [CommandID.InstacePlugin]: {
+        label: 'Add Plugun to Node: pluginId',
+        action: (arg?: string) => addNodePropertyFromQuery(arg),
+        color: "#45cd73"
     },
     [CommandID.ExportPng]: {
         label: 'Export PNG: Default Scale',

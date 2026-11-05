@@ -18,6 +18,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { login, logout, signup } from "./models/authStore";
 import type { LicenseCommandController } from "./components/LicenseGuard";
+import { ToastContainer } from "./views/components/ToastContainer";
 
 const startView : 'lobby' | 'editor' = 'lobby';
 type MainView = 'lobby' | 'editor';
@@ -237,6 +238,7 @@ function App() {
                 </LicenseGuard>
             </Show>
             <CommandConsole options={consoleOptions} />
+            { ToastContainer() }
         </>
     );
 }

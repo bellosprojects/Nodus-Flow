@@ -185,6 +185,33 @@ export const drawNodeOpcionalText = (CK: CanvasKit, node: Node, exportCanvas?: C
     }
 };
 
+export const getNodePath = (CK: CanvasKit, node: Node): Path => {
+    const rectBounds = CK.LTRBRect(node.x, node.y, node.x + node.width, node.y + node.height);
+    const safeRadius = Number(node.radius) || 0;
+    const path = getPath(CK, `node_geom_${node.id}`);
+    path.rewind();
+
+    switch(node.style) {
+        case 2:
+            // Para óvalos/círculos en Skia, a veces es más cómodo agregarlo como óvalo al path
+            path.addOval(rectBounds);
+            break;
+        case 3:
+            const cx = node.x + node.width / 2;
+            const cy = node.y + node.height / 2;
+            path.moveTo(cx, node.y);
+            path.lineTo(node.x + node.width, cy);
+            path.lineTo(cx, node.y + node.height);
+            path.lineTo(node.x, cy);
+            path.close();
+            break;
+        default:
+            const rrect = CK.RRectXY(rectBounds, safeRadius, safeRadius);
+            path.addRRect(rrect);
+    }
+    return path;
+}
+
 export const drawNode = (CK: CanvasKit, node: Node, exportCanvas? : Canvas) => {
 
     if(!nodusCanvas.canDraw() && !exportCanvas) return;

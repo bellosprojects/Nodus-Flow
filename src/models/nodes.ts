@@ -9,6 +9,7 @@ import { showToast, ToastType } from "./toast";
 import { calculateDiagramBounds } from "../utils/path";
 import { wsService } from "../core/socket";
 import { invalidateParagraphCache } from "../core/renderer";
+import { nodusPluginManager } from "../plugins/plugins";
 
 export interface Node {
     id: string,
@@ -598,6 +599,8 @@ export const addNodeProperty = (id: string, propertyName: string, propertyValue:
         });
 
     }
+
+    nodusPluginManager.updateNodeProperties(id, propertyName, propertyValue);
 }
 
 export const deleteNodeProperty = (id: string, propertyName: string, send = true) => {
@@ -621,4 +624,6 @@ export const deleteNodeProperty = (id: string, propertyName: string, send = true
         });
 
     }
+
+    nodusPluginManager.updateNodeProperties(id, propertyName, null);
 }       

@@ -3,11 +3,11 @@ mod ai_bridge;
 mod mcp_stdio;
 
 use ai_bridge::{
-    complete_ai_bridge_request, get_ai_bridge_status, list_ai_bridge_clients, pair_ai_bridge_client,
-    revoke_ai_bridge_client, start_ai_bridge, stop_ai_bridge, AiBridgeState,
+    complete_ai_bridge_request, get_ai_bridge_status, list_ai_bridge_clients,
+    pair_ai_bridge_client, revoke_ai_bridge_client, start_ai_bridge, stop_ai_bridge, AiBridgeState,
 };
-use std::process::{Stdio};
 use std::io::{BufRead, BufReader, Write};
+use std::process::Stdio;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager, State};
 
@@ -27,7 +27,9 @@ fn eval_heza(state: State<'_, HezaConsole>, expr: String) -> Result<String, Stri
 
     let result = (|| -> Result<String, String> {
         let payload = format!("{}\n", expr);
-        stdin.write_all(payload.as_bytes()).map_err(|e| e.to_string())?;
+        stdin
+            .write_all(payload.as_bytes())
+            .map_err(|e| e.to_string())?;
         stdin.flush().map_err(|e| e.to_string())?;
 
         let mut response = String::new();
@@ -45,10 +47,10 @@ fn eval_heza(state: State<'_, HezaConsole>, expr: String) -> Result<String, Stri
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         // 1. Registrar el plugin single-instance PRIMERO
-        
         // 2. Luego el plugin deep-link
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_fs::init())
@@ -75,7 +77,8 @@ pub fn run() {
                 }
             });
 
-            let sidecar_command = app.shell()
+            let sidecar_command = app
+                .shell()
                 .sidecar("heza_console")
                 .expect("Fallo al crear el comando sidecar");
 
@@ -94,7 +97,9 @@ pub fn run() {
                 println!("Mensaje de bienvenida omitido: {}", welcome_banner.trim());
             }
 
-            app.manage(HezaConsole { process: Mutex::new(child)});
+            app.manage(HezaConsole {
+                process: Mutex::new(child),
+            });
 
             Ok(())
         })

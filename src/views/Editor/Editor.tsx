@@ -14,7 +14,6 @@ import { ConfigPanel } from "./components/ConfigPanel/ConfiguracionPanel";
 import { AutosavePanel } from "./components/AutosavePanel/AutosavePanel";
 import { EDITOR_HEADER } from "./components/Header/Header";
 import { LAYERS_PANEL } from "./components/LayersPanel/LayersPanel";
-import { ToastContainer } from "../components/ToastContainer";
 
 // MODELOS (NODOS)
 import { 
@@ -58,7 +57,7 @@ import { manageResizing } from "../../utils/resizing";
 import { obtenerColorTexto } from "../../utils/color";
 
 import { moveNodeThrottle, wsService } from "../../core/socket";
-import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { nodusCanvas } from "../../core/NodusCanvas";
 
 // RENDERIZACION
@@ -81,7 +80,9 @@ import {
     drawConnectionPoint, 
     setSourceAnchorPoint,
     invalidateAllResources,
-    invalidateParagraphCache
+    invalidateParagraphCache,
+    getNodePath,
+    drawNodeOpcionalText
 } from "../../core/renderer";
 
 // MANEJO DE LA VENTANA
@@ -117,6 +118,7 @@ import {
 
 import { commitTransaction, startTransaction } from "../../core/history";
 import { setIsAppLoading, setLoadingAppMessage } from "../components/Transition";
+import { nodusPluginManager, PluginContext } from "../../plugins/plugins";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
@@ -854,6 +856,33 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
             }, {passive: false});
 
+            createEffect(() => {
+                const nodesWithPlugin = nodes.filter(node => node.properties.pluginId);
+                const currentPluginNodeIds = new Set(nodesWithPlugin.map(n => n.id));
+
+                nodesWithPlugin.forEach(node => {
+                    if(!nodusPluginManager.hasActiveInstance(node.id)){
+                        const CK = nodusCanvas.getCK();
+                        if(!CK) return;
+
+                        const pluginContext : PluginContext = {
+                            ck: CK,
+                        };
+
+                        nodusPluginManager.initNodePlugin(node.id, node.properties.pluginId!, node, pluginContext);
+                        console.log(`Instaced: ${node.id} to ${node.properties.pluginId!}`);
+                    }
+                });
+
+                const activeInstacesIds = nodusPluginManager.getActiveInstacesIds();
+
+                activeInstacesIds.forEach(nodeId => {
+                    if(!currentPluginNodeIds.has(nodeId)){
+                        nodusPluginManager.destroyNodePlugin(nodeId);
+                    }
+                })
+            })
+
             
             const CK = nodusCanvas.getCK();
 
@@ -916,8 +945,27 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 
                 // Dibujar nodos bloqueados (visibles)
                 lockedNodes.forEach(node => {
-                    drawNode(CK, node);
-                    drawNodeText(CK, node, nodusCanvas.getFont());
+                    const pluginTexture = nodusPluginManager.getNodeRenderFrame(node.id, node.width, node.height);
+                    if(pluginTexture){
+                        const canvas = nodusCanvas.getCanvas();
+                        canvas.save();
+                        const nodePath = getNodePath(CK, node);
+                        canvas.clipPath(nodePath, CK.ClipOp.Intersect, true);
+                        canvas.drawImageRect(
+                            pluginTexture,
+                            CK.XYWHRect(0, 0, pluginTexture.width(), pluginTexture.height()),
+                            CK.XYWHRect(node.x, node.y, node.width, node.height),
+                            nodusCanvas.standardPaint
+                        );
+
+                        canvas.restore();
+                        drawNodeOpcionalText(CK, node);
+                    } else if (!node.properties.pluginId && !nodusPluginManager.hasHtmlRenderer(node.id)) {
+                        drawNode(CK, node);
+                        drawNodeText(CK, node, nodusCanvas.getFont());
+                    } else {
+                        drawNodeOpcionalText(CK, node);
+                    }
                 });
                 
                 // Dibujar conexiones solo entre nodos visibles
@@ -945,8 +993,28 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 
                 // Dibujar nodos no bloqueados (visibles)
                 unlockedNodes.forEach(node => {
-                    drawNode(CK, node);
-                    drawNodeText(CK, node, nodusCanvas.getFont());
+                    
+                    const pluginTexture = nodusPluginManager.getNodeRenderFrame(node.id, node.width, node.height);
+                    if(pluginTexture){
+                        const canvas = nodusCanvas.getCanvas();
+                        canvas.save();
+                        const nodePath = getNodePath(CK, node);
+                        canvas.clipPath(nodePath, CK.ClipOp.Intersect, true);
+                        canvas.drawImageRect(
+                            pluginTexture,
+                            CK.XYWHRect(0, 0, pluginTexture.width(), pluginTexture.height()),
+                            CK.XYWHRect(node.x, node.y, node.width, node.height),
+                            nodusCanvas.standardPaint
+                        );
+
+                        canvas.restore();
+                        drawNodeOpcionalText(CK, node);
+                    } else if (!node.properties.pluginId && !nodusPluginManager.hasHtmlRenderer(node.id)) {
+                        drawNode(CK, node);
+                        drawNodeText(CK, node, nodusCanvas.getFont());
+                    } else {
+                        drawNodeOpcionalText(CK, node);
+                    }
                 });
 
                 if(isResizing() || (draggedNodeId() && draggedNodeId() !== "root")){
@@ -1194,6 +1262,43 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
             { EDITOR_HEADER(handleShare) }
 
+            <For each={nodes.filter(n => n.properties.pluginId && nodusPluginManager.hasHtmlRenderer(n.id))}>
+                {node => {
+                    const screenPos = () => nodusCanvas.camera.wordlToScreen(node.x, node.y);
+                    const zoom = () => nodusCanvas.camera.zoom();
+                    let hostRef: HTMLDivElement | undefined;
+
+                    onMount(() => {
+                        if(!hostRef) return;
+
+                        const shadow = hostRef.attachShadow({mode: 'open'});
+
+                        const pluginRoot = document.createElement('div');
+                        pluginRoot.style.width = '100%';
+                        pluginRoot.style.height = '100%';
+                        shadow.appendChild(pluginRoot);
+
+                        nodusPluginManager.getNodeHTML(node.id, pluginRoot);
+                    });
+
+                    return (
+                        <div
+                            ref={hostRef}
+                            style={{
+                                position: "absolute",
+                                left: `${screenPos().x}px`,
+                                top: `${screenPos().y}px`,
+                                width: `${node.width * zoom()}px`,
+                                height: `${node.height * zoom()}px`,
+                                overflow: 'hidden',
+                                "pointer-events": "none",
+                                "z-index": 10
+                            }}
+                        />
+                    )
+                }}
+            </For>
+
             <Show when={!isViewer() && editingNodeDetails()}>
                 {details => {
                     const screenPosition = () => nodusCanvas.camera.wordlToScreen(details().node.x, details().node.y);
@@ -1274,9 +1379,6 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                     {dataFlowResult()}
                 </div>
             </Show>
-
-            { ToastContainer() }
-
 
         </div>
     );
