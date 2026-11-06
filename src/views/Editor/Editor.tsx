@@ -119,12 +119,14 @@ import {
 import { commitTransaction, startTransaction } from "../../core/history";
 import { setIsAppLoading, setLoadingAppMessage } from "../components/Transition";
 import { nodusPluginManager, PluginContext } from "../../plugins/plugins";
+import { PluginPanel } from "./components/PluginPanel/PluginPanel";
 
 export const [isLayersPanelOpen, setIsLayersPanelOpen] = createSignal(false);
 export const [isEditPanelOpen, setIsEditPanelOpen] = createSignal(true);
 export const [isCommandPaletteOpen, setIsCommandPaletteOpen] = createSignal(false);
 export const [isConfigPanelOpen, setIsConfigPanelOpen] = createSignal(false);
 export const [isAutosavePanelOpen, setIsAutosavePAnelopen] = createSignal(false);
+export const [isPluginPanelOpen, setIsPluginPanelOpen] = createSignal(false);
 
 export const [isRunningDataFlow, setIsRunningDataFlow] = createSignal(false);
 export const [dataFlowResult, setDataFlowResult] = createSignal("");
@@ -946,7 +948,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 // Dibujar nodos bloqueados (visibles)
                 lockedNodes.forEach(node => {
                     const pluginTexture = nodusPluginManager.getNodeRenderFrame(node.id, node.width, node.height);
-                    if(pluginTexture){
+                    if(pluginTexture !== null){
                         const canvas = nodusCanvas.getCanvas();
                         canvas.save();
                         const nodePath = getNodePath(CK, node);
@@ -960,11 +962,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
                         canvas.restore();
                         drawNodeOpcionalText(CK, node);
-                    } else if (!node.properties.pluginId && !nodusPluginManager.hasHtmlRenderer(node.id)) {
-                        drawNode(CK, node);
-                        drawNodeText(CK, node, nodusCanvas.getFont());
-                    } else {
+                    } else if (node.properties.pluginId && nodusPluginManager.hasHtmlRenderer(node.id)) {
                         drawNodeOpcionalText(CK, node);
+                    } else {
+                        drawNodeText(CK, node, nodusCanvas.getFont());
+                        drawNode(CK, node);
                     }
                 });
                 
@@ -995,7 +997,7 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 unlockedNodes.forEach(node => {
                     
                     const pluginTexture = nodusPluginManager.getNodeRenderFrame(node.id, node.width, node.height);
-                    if(pluginTexture){
+                    if(pluginTexture !== null){
                         const canvas = nodusCanvas.getCanvas();
                         canvas.save();
                         const nodePath = getNodePath(CK, node);
@@ -1009,11 +1011,11 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
 
                         canvas.restore();
                         drawNodeOpcionalText(CK, node);
-                    } else if (!node.properties.pluginId && !nodusPluginManager.hasHtmlRenderer(node.id)) {
+                    } else if (node.properties.pluginId && nodusPluginManager.hasHtmlRenderer(node.id)) {
+                        drawNodeOpcionalText(CK, node);
+                    } else {
                         drawNode(CK, node);
                         drawNodeText(CK, node, nodusCanvas.getFont());
-                    } else {
-                        drawNodeOpcionalText(CK, node);
                     }
                 });
 
@@ -1336,22 +1338,19 @@ export const Editor = (props: { onNavigate: (v: 'lobby' | 'editor') => void}) =>
                 {COMMAND_PALETTE()}
             </Show>
 
-            <Show when={!isViewer() && !isCommandPaletteOpen()}>
+            <Show when={!isViewer() && !isCommandPaletteOpen() && !isPluginPanelOpen()}>
                 { LEFT_TOOLBAR(onFullScrren, onHome) }
             </Show>
 
 
             <Show when={!isViewer()}>
                 { Properties() }
-            </Show>
 
-
-            <Show when={!isViewer()}>
                 { TOOL_BELT() }
-            </Show>
 
-            <Show when={!isViewer()}>
                 { LAYERS_PANEL() }
+
+                { PluginPanel() }
             </Show>
 
             { CURRENT_POSITION(!isViewer()) }

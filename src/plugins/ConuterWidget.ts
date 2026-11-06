@@ -2,6 +2,7 @@ import { PluginInstance, PluginContext, PluginManifest, PluginView, PluginListen
 
 export class CounterWidgetPlugin implements PluginInstance {
     private count = 0;
+    private context : PluginContext | undefined;
 
     manifest : PluginManifest = { 
         id: 'com.nodus.counter-widget', 
@@ -9,10 +10,12 @@ export class CounterWidgetPlugin implements PluginInstance {
         version: '1.0.0',
         nodusVersion: '1.0.0',
         publisher: 'Nodus Flow',
-        description: 'Muestra un contador simple inicializado en 0 que aumenta en uno al tocar un boton',
-        usageProperties: {},
+        description: 'Muestra un contador simple inicializado en cero que aumenta en uno al tocar un boton',
+        usageProperties: {
+            initialCount: "Conteo inicial (Se guarda en el nodo)"
+        },
         tags: ['counter', 'interactivity'],
-        permissions: []
+        permissions: ['node']
     };
 
     view: PluginView = {
@@ -36,8 +39,9 @@ export class CounterWidgetPlugin implements PluginInstance {
         renderHTML: (container: HTMLElement) => this.renderCounter(container)
     };
 
-    onLoad(data: Record<string, any>, __: PluginContext) {
+    onLoad(data: Record<string, any>, context: PluginContext) {
         this.count = data.initialCount || 0;
+        this.context = context;
     }
 
     renderCounter(container: HTMLElement) {
@@ -57,6 +61,9 @@ export class CounterWidgetPlugin implements PluginInstance {
             e.stopPropagation(); // Evita que burbujee raro hacia el canvas si no es necesario
             this.count++;
             label.textContent = `Clicks: ${this.count}`;
+            if(this.context?.nodeApi){
+                this.context.nodeApi.updateProperty('initialCount', this.count);
+            }
         };
 
         wrapper.appendChild(label);

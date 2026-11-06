@@ -4,6 +4,7 @@ import { CounterWidgetPlugin } from "./ConuterWidget";
 import { addNodeProperty, finalizeNodeSize, getNode, Node, updateNodeSize } from "../models/nodes";
 import { actionUpdateNodeTitle } from "../core/actions";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { createSignal } from "solid-js";
 
 const ALLOWEB_NETWORK_PROTOCOLS = /^https?:\/\//i;
 
@@ -83,6 +84,10 @@ class PluginManager {
     private failedPlugins: Set<string> = new Set();
     private static readonly URL_HINT = /(url|uri|http|https|endpoint|cdn|href|src|remote|web)/i;
 
+    private versionSignal = createSignal(0);
+    getVersion() { return this.versionSignal[0](); }
+    private bumpVersion() { this.versionSignal[1](v => v + 1); }
+
     private declaredURLProps(manifest: PluginManifest): boolean {
         return Object.entries(manifest.usageProperties || {}).some(
             ([key, desc]) => PluginManager.URL_HINT.test(key) || PluginManager.URL_HINT.test(desc),
@@ -96,6 +101,7 @@ class PluginManager {
 
     registerPlugin(plugin: PluginInstance) {
         this.registeredPlugins.set(plugin.manifest.id, plugin);
+        this.bumpVersion();
     }
 
     initNodePlugin(nodeId: string, pluginId: string, node: Node, baseContext: PluginContext){
@@ -164,6 +170,7 @@ class PluginManager {
         }
 
         this.activeInstances.set(nodeId, instance);
+        this.bumpVersion();
     }
 
     getNodeRenderFrame(nodeId: string, width: number, height: number): CanvasKitImage | null {
@@ -209,6 +216,7 @@ class PluginManager {
             }
             this.activeInstances.delete(nodeId);
             this.failedPlugins.delete(nodeId);
+            this.bumpVersion();
         }
     }
 
@@ -223,6 +231,22 @@ class PluginManager {
 
     getActiveInstacesIds(): string[] {
         return Array.from(this.activeInstances.keys());
+    }
+
+    getRegisteredPluginsManifest(): PluginManifest[] {
+        const manifests : PluginManifest[] = [];
+        this.registeredPlugins.forEach(plugin => {
+            manifests.push(plugin.manifest);
+        });
+        return manifests;
+    }
+
+    getActivedPluginsView(): {view: PluginView; name: string; node: string}[] {
+        const views : {view: PluginView; name: string; node: string}[] = [];
+        this.activeInstances.forEach((plugin, nodeId) => {
+            views.push({view: plugin.view, name: plugin.manifest.name, node: nodeId});
+        });
+        return views;
     }
 
     updateNodeProperties(nodeId: string, propertyName: string, propertyValue: any){

@@ -1,0 +1,171 @@
+.pluginPanel {
+    position: absolute;
+    top: 50%;
+    left: 20px;
+    transform: translateY(-50%);
+
+    pointer-events: auto;
+    
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    
+    width: 340px;
+    height: calc(100% - 150px);
+
+    border-radius: 12px;
+    color: white;
+
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(45px);
+    background-color: rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+    z-index: 20;
+}
+
+.pluginHeader {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    height: 100%;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 5px 10px;
+}
+
+.manifest {
+    display: flex;
+    gap: 8px;
+    cursor: pointer;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    transition: all ease .3s;
+    padding: 3px 8px;
+}
+
+.manifest:hover {
+    background-color: rgba(154, 196, 209, 0.281);
+}
+
+.applyPluginBtn {
+    cursor: pointer;
+    border: none;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 2px 20px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: white;
+}
+
+.manifestDetailts {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+.manifestDetailts span {
+    color: #ccc;
+}
+
+.manifestLists {
+    flex-grow: 1;
+}
+
+.goToInstancesBtn {
+    cursor: pointer;
+    border: none;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 6px 10px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.05);
+    color: white;
+    margin-bottom: 10px;
+    font-size: small;
+    transition: all ease 0.3s;
+}
+
+.goToInstancesBtn:hover {
+    transform: scale(1.01);
+    background-color: rgba(154, 196, 209, 0.281);
+}
+
+.pluginView {
+    flex-grow: 1;
+    padding-bottom: 15px;
+    overflow: hidden;
+    height: 100%;
+}
+
+.pluginCard {
+    height: 100%;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 5px 16px;
+    overflow-y: auto;
+    padding-bottom: 15px;
+}
+
+.publisher {
+    color: #ccc;
+}
+
+.tags {
+    display: flex;
+}
+
+.tags span {
+    margin: 4px;
+    padding: 4px;
+    border-radius: 4px;
+    background-color: #132d3138;
+    border: 1px solid #132d3138;
+}
+
+.permissions {
+    display: flex;
+}
+
+.permissions span {
+    margin: 4px;
+    padding: 4px;
+    border-radius: 4px;
+    background-color: #31131338;
+    border: 1px solid #132d3138;
+}
+
+.instace {
+    margin-bottom: 15px;
+    cursor: pointer;
+    padding: 3px 8px;
+    transition: all ease .3s;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+}
+
+.instace:hover {
+    background-color: rgba(154, 196, 209, 0.281);
+}
+
+.instace img {
+    width: 24px;
+    filter: invert(80%);
+    cursor: pointer;
+    transition: all ease .3s;
+}
+
+.instace img:hover {
+    transform: scale(1.05);
+    filter: invert(100%);
+}
+
+.instaceDetails {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-grow: 1;
+}
+
+.instaceDetails span {
+    color: #ccc;
+}

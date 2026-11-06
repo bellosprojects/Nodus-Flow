@@ -17,6 +17,7 @@
   color: #e8e8e8;
   overflow: hidden;
   transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 20;
 }
 
 /* Pestañas */

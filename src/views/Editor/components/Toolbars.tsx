@@ -6,6 +6,7 @@ import homeIco from "../../../assets/home.svg";
 import editIco from "../../../assets/edit.svg";
 import layersIco from "../../../assets/layers.svg";
 import terminalIco from "../../../assets/terminal.svg";
+import pluginIco from  "../../../assets/plugin.svg";
 import configIco from "../../../assets/settings.svg";
 import autosaveIco from "../../../assets/autosave.svg";
 import playIco from "../../../assets/play.svg";
@@ -28,6 +29,7 @@ import {
     isConfigPanelOpen, 
     isEditPanelOpen, 
     isLayersPanelOpen, 
+    isPluginPanelOpen, 
     isPressedEspace, 
     mouseOption, 
     setIsAutosavePAnelopen, 
@@ -35,6 +37,7 @@ import {
     setIsConfigPanelOpen, 
     setIsEditPanelOpen, 
     setIsLayersPanelOpen, 
+    setIsPluginPanelOpen, 
     setMouseOption 
 } from '../Editor';
 
@@ -61,6 +64,8 @@ export const LEFT_TOOLBAR = (onFullScreen: () => void, onHome: (() => void)) => 
 
             <img src={terminalIco} alt="" class={`${styles.barItem} ${isCommandPaletteOpen()? styles.selected : ""}`} onClick={(_) => setIsCommandPaletteOpen(prev => !prev)}/>
 
+            <img src={pluginIco} alt="" class={`${styles.barItem} ${isPluginPanelOpen()? styles.selected : ""}`} onClick={(_) => setIsPluginPanelOpen(prev => !prev)}/>
+            
             <div class={styles.separator} />
 
             <div

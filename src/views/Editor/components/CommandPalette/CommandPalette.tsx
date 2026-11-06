@@ -8,7 +8,7 @@ import { exportDiagramAsPng, exportDiagramAsSVG } from "../../../../core/rendere
 import { exportAsJson } from "../../../../models/userStore";
 import { nodusCanvas } from "../../../../core/NodusCanvas";
 import { calculateDiagramBounds } from "../../../../utils/path";
-import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate, setZoomFromCommand, evalValueFromCommand, addPluginToNodeFromCommand } from "../../../../utils/commands";
+import { addNodePropertyFromQuery, connectGraph, createNodesFromCommand, deleteFromQuery, deleteNodePropertyFromQuery, addConnectionPropertyFromQuery, deleteConnectionPropertyFromQuery, importFromQuery, generate, setZoomFromCommand, evalValueFromCommand } from "../../../../utils/commands";
 import { connections, setSelectedConnectionId } from "../../../../models/connections";
 
 export const [activeIndex, setActiveIndex] = createSignal(0);

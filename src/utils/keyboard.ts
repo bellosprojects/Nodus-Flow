@@ -1,6 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { nodes, selectedNodesIds, selectedNodes } from "../models/nodes";
-import { mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setIsPRessedEspace, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
+import { isCommandPaletteOpen, mousePos, setIsCommandPaletteOpen, setIsEditPanelOpen, setIsLayersPanelOpen, setIsPluginPanelOpen, setIsPRessedEspace, setMouseDisables, setMouseOption } from "../views/Editor/Editor";
 import { activeIndex, filteredItems, onSelectedItem, setActiveIndex, setSearchQuery } from "../views/Editor/components/CommandPalette/CommandPalette";
 import { activeUsers, useUser } from "../models/users";
 import { userData } from "../models/userStore";
@@ -84,6 +84,9 @@ function openCommandPaletteEvent(e: KeyboardEvent){
         e.preventDefault();
         setIsCommandPaletteOpen(prev => !prev);
         setSearchQuery("");
+        if(isCommandPaletteOpen()){
+            setIsPluginPanelOpen(false);
+        }
     } else if (e.key === 'Escape'){
         setIsCommandPaletteOpen(false);
     }
@@ -194,6 +197,11 @@ function nodeSelectionsEvent(e: KeyboardEvent){
 }
 
 function extraShortCuts(e: KeyboardEvent){
+
+    if(e.key === 'Escape') {
+        setIsPluginPanelOpen(false);
+    }
+
     if(!isViewer() && (e.ctrlKey || e.metaKey)){
         e.preventDefault();
         if(e.key === 'l'){
